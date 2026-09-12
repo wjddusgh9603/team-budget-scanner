@@ -1,832 +1,907 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>팀 예산 스캐너</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
-        .hide-scrollbar::-webkit-scrollbar { display: none; }
-        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .glass-panel { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(0,0,0,0.05); }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>팀 예산 스캐너</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/regular/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/bold/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/fill/style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap" rel="stylesheet" onerror="this.remove()">
+
+<style>
+  html, body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif; }
+  * { -webkit-tap-highlight-color: transparent; }
+  ::-webkit-scrollbar { display: none; }
+  body { -ms-overflow-style: none; scrollbar-width: none; background:#f8fafc; }
+
+  #phone-frame { max-width: 480px; margin: 0 auto; min-height: 100vh; background:#f8fafc; position:relative; box-shadow: 0 0 40px rgba(0,0,0,0.06); }
+
+  .view { animation: fadeSlide .22s ease both; }
+  @keyframes fadeSlide { from { opacity:0; transform: translateY(6px);} to {opacity:1; transform:none;} }
+
+  .modal-backdrop { animation: fadeIn .18s ease both; }
+  .modal-sheet { animation: sheetUp .22s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+  @keyframes sheetUp { from{ transform: translateY(24px); opacity:0 } to{ transform:none; opacity:1 } }
+
+  .spinner { border: 3px solid rgba(255,255,255,0.25); border-top-color:#fff; border-radius:50%; width:44px; height:44px; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .toast { animation: toastIn .25s ease both; }
+  @keyframes toastIn { from { opacity:0; transform: translate(-50%, 10px); } to { opacity:1; transform: translate(-50%,0);} }
+
+  input:focus, select:focus, textarea:focus { outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,0.15); border-color:#2563eb; }
+  input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(30%) sepia(70%) saturate(2000%) hue-rotate(210deg); }
+
+  .fab-shadow { box-shadow: 0 10px 25px -5px rgba(37,99,235,0.45), 0 8px 10px -6px rgba(37,99,235,0.35); }
+</style>
 </head>
-<body class="bg-gray-50 text-gray-800 antialiased h-screen flex flex-col overflow-hidden">
+<body class="bg-gray-50 text-gray-900">
 
-    <header class="glass-panel sticky top-0 z-40 px-4 py-3 flex justify-between items-center shadow-sm">
-        <div class="flex items-center gap-3">
-            <div class="bg-blue-600 text-white p-2 rounded-xl shadow-md">
-                <i class="ph-fill ph-receipt text-xl"></i>
-            </div>
-            <div>
-                <h1 class="font-bold text-lg leading-tight tracking-tight text-gray-900">팀 예산 스캐너</h1>
-                <!-- Team Selector Dropdown -->
-                <select id="global-team-selector" onchange="filterDataByTeam()" class="text-xs font-semibold text-blue-600 bg-transparent outline-none mt-0.5 cursor-pointer">
-                    <option value="U18">U18 팀</option>
-                    <option value="U15">U15 팀</option>
-                    <option value="U12">U12 팀</option>
-                    <option value="U18치료실">U18 치료실</option>
-                    <option value="U15치료실">U15 치료실</option>
-                </select>
-            </div>
+<div id="phone-frame">
+
+  <!-- ===================== HEADER ===================== -->
+  <header class="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-gray-100">
+    <div class="flex items-center justify-between px-4 h-16">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
+          <i class="ph-fill ph-receipt text-white text-lg"></i>
         </div>
-        <button onclick="switchView('view-settings')" class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-gray-200 transition">
-            <i class="ph ph-gear text-xl"></i>
+        <div class="leading-tight">
+          <p class="text-[10px] font-medium text-gray-400 tracking-wide">TEAM BUDGET</p>
+          <h1 class="text-[15px] font-bold text-gray-900 -mt-0.5">팀 예산 스캐너</h1>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="relative">
+          <select id="team-select" class="appearance-none bg-gray-100 hover:bg-gray-200 transition text-sm font-semibold text-gray-800 rounded-full pl-3.5 pr-8 py-2 cursor-pointer"></select>
+          <i class="ph ph-caret-down text-xs text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+        </div>
+        <button id="btn-settings" class="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center">
+          <i class="ph ph-gear-six text-lg text-gray-600"></i>
         </button>
-    </header>
+      </div>
+    </div>
+  </header>
 
-    <main id="view-list" class="flex-1 overflow-y-auto hide-scrollbar pb-24">
-        <div class="p-4 space-y-6">
-            <!-- Monthly Summary Card -->
-            <div class="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl p-6 text-white shadow-xl shadow-blue-900/20 relative overflow-hidden">
-                <div class="absolute top-0 right-0 p-4 opacity-10">
-                    <i class="ph-fill ph-coins text-8xl"></i>
-                </div>
-                <div class="relative z-10">
-                    <div class="flex justify-between items-end mb-2">
-                        <span class="text-blue-100 font-medium text-sm"><span id="current-month-text">이번 달</span> <span id="current-team-text">U18</span> 지출액</span>
-                    </div>
-                    <div class="text-4xl font-extrabold tracking-tight">
-                        ₩<span id="total-expense">0</span>
-                    </div>
-                    <div class="mt-4 flex gap-2">
-                        <span class="bg-white/20 px-3 py-1 rounded-full text-xs font-medium backdrop-blur-sm">총 <span id="receipt-count">0</span>건</span>
-                    </div>
-                </div>
-            </div>
+  <!-- ===================== VIEW 1: DASHBOARD ===================== -->
+  <main id="view-dashboard" class="view px-4 pt-5 pb-28">
 
-            <!-- Charts Section -->
-            <div class="bg-white rounded-3xl p-5 shadow-sm border border-gray-100">
-                <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                    <i class="ph-fill ph-chart-pie-slice text-blue-500"></i> 카테고리별 지출
-                </h3>
-                <div class="w-full h-48 relative flex items-center justify-center">
-                    <canvas id="pieChart"></canvas>
-                    <div id="no-chart-data" class="absolute inset-0 flex items-center justify-center text-sm text-gray-400 font-medium hidden">
-                        데이터가 없습니다
-                    </div>
-                </div>
-            </div>
-
-            <!-- Recent Expenses List -->
-            <div>
-                <div class="flex justify-between items-end mb-4 px-1">
-                    <h3 class="font-bold text-gray-800 flex items-center gap-2">
-                        <i class="ph-fill ph-clock-counter-clockwise text-indigo-500"></i> 최근 결제 내역
-                    </h3>
-                </div>
-                <div id="expense-list" class="space-y-3">
-                    <!-- JS will populate this -->
-                </div>
-            </div>
+    <!-- Summary card -->
+    <section class="rounded-3xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-5 shadow-lg shadow-blue-600/20">
+      <p id="summary-month-label" class="text-xs font-medium text-blue-100">이번 달 지출</p>
+      <div class="flex items-end justify-between mt-1.5">
+        <h2 id="summary-total" class="text-[30px] font-extrabold tracking-tight">0원</h2>
+        <div class="text-right">
+          <p id="summary-count" class="text-sm font-semibold text-blue-50">0건</p>
+          <p class="text-[11px] text-blue-200">총 결제 건수</p>
         </div>
-    </main>
+      </div>
+    </section>
 
-    <main id="view-form" class="flex-1 overflow-y-auto hide-scrollbar pb-24 hidden bg-white">
-        <div class="p-5">
-            <div class="flex items-center justify-between mb-6">
-                <h2 class="text-xl font-bold text-gray-900">영수증 등록</h2>
-                <button onclick="switchView('view-list')" class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-600">
-                    <i class="ph ph-x"></i>
-                </button>
-            </div>
-
-            <!-- AI Scan Overlay -->
-            <div id="loading-overlay" class="hidden absolute inset-0 bg-white/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center rounded-t-3xl">
-                <div class="w-16 h-16 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mb-4"></div>
-                <p id="loading-status-text" class="text-blue-600 font-bold animate-pulse">AI가 영수증 분석 중...</p>
-                <p class="text-xs text-gray-500 mt-2">잠시만 기다려주세요</p>
-            </div>
-
-            <form id="expense-form" class="space-y-5">
-                <input type="hidden" id="entry-id">
-                
-                <!-- Team Indicator -->
-                <div class="bg-indigo-50 text-indigo-700 p-3 rounded-xl text-sm font-semibold flex items-center justify-between border border-indigo-100">
-                    <span>저장될 팀 시트</span>
-                    <span id="form-team-label" class="bg-indigo-600 text-white px-2 py-1 rounded-md text-xs">U18</span>
-                </div>
-
-                <!-- Image Upload / Preview -->
-                <div class="w-full">
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">영수증 사진 (선택)</label>
-                    <div id="image-preview-container" class="hidden mb-3 relative rounded-xl overflow-hidden border border-gray-200">
-                        <img id="image-preview" class="w-full h-48 object-cover" />
-                        <div class="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
-                        <button type="button" onclick="document.getElementById('file-input').click()" class="absolute bottom-3 right-3 bg-white/20 backdrop-blur-md text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1">
-                            <i class="ph ph-arrows-clockwise"></i> 다시 찍기
-                        </button>
-                    </div>
-                    
-                    <input type="file" id="file-input" accept="image/*" capture="environment" class="hidden" />
-                    
-                    <!-- Progress Bar for Upload/Scan -->
-                    <div id="scan-line" class="hidden w-full h-1 bg-gray-100 rounded-full overflow-hidden mb-2">
-                        <div class="h-full bg-blue-500 animate-[scan_2s_ease-in-out_infinite] w-1/3"></div>
-                    </div>
-
-                    <div class="flex gap-2">
-                        <button type="button" onclick="document.getElementById('file-input').click()" class="flex-1 bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl py-4 flex flex-col items-center justify-center text-gray-500 hover:bg-gray-100 transition">
-                            <i class="ph ph-camera text-2xl mb-1"></i>
-                            <span class="text-xs font-semibold">카메라 촬영</span>
-                        </button>
-                        <button type="button" onclick="document.getElementById('file-input').removeAttribute('capture'); document.getElementById('file-input').click();" class="flex-1 bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl py-4 flex flex-col items-center justify-center text-gray-500 hover:bg-gray-100 transition">
-                            <i class="ph ph-image text-2xl mb-1"></i>
-                            <span class="text-xs font-semibold">앨범에서 선택</span>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">결제일자 <span class="text-red-500">*</span></label>
-                        <input type="date" id="entry-date" required class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">결제금액 <span class="text-red-500">*</span></label>
-                        <div class="relative">
-                            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">₩</span>
-                            <input type="number" id="entry-amount" required placeholder="0" class="w-full bg-gray-50 border border-gray-200 rounded-xl pl-8 pr-4 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
-                        </div>
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-1">카테고리 <span class="text-red-500">*</span></label>
-                    <div class="relative">
-                        <select id="entry-category" required class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition appearance-none">
-                            <option value="" disabled selected>선택해주세요</option>
-                            <option value="식사비">🍚 식사비</option>
-                            <option value="간식비">🍩 간식비</option>
-                            <option value="연습경기 간식비">⚽ 연습경기 간식비</option>
-                            <option value="리그경기 간식비">🏆 리그경기 간식비</option>
-                            <option value="의료/비품비">🩹 의료/비품비</option>
-                            <option value="기타">기타</option>
-                        </select>
-                        <i class="ph ph-caret-down absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"></i>
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-1">사용처 (상호명) <span class="text-red-500">*</span></label>
-                    <input type="text" id="entry-shopName" required placeholder="예: 댓잎갈비, 카페트리" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
-                </div>
-
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-1">사용내역 (품목/적요)</label>
-                    <input type="text" id="entry-items" placeholder="예: 코칭스태프 & 송병주샘 중식비" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
-                </div>
-
-                <div class="pt-4 pb-10">
-                    <button type="submit" class="w-full bg-blue-600 text-white rounded-xl py-4 font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition flex items-center justify-center gap-2 text-lg">
-                        <i class="ph-bold ph-check"></i> 
-                        <span id="save-btn-text">구글 시트에 저장하기</span>
-                    </button>
-                    <p class="text-center text-xs text-gray-400 mt-3 flex items-center justify-center gap-1">
-                        <i class="ph-fill ph-lock-key"></i> 데이터는 선택된 팀의 구글 시트로 자동 전송됩니다.
-                    </p>
-                </div>
-            </form>
+    <!-- Category chart -->
+    <section class="mt-4 bg-white rounded-3xl p-5 border border-gray-100">
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="text-sm font-bold text-gray-800">카테고리별 지출 비율</h3>
+      </div>
+      <div id="chart-wrap" class="relative flex items-center gap-4">
+        <div class="relative w-[132px] h-[132px] shrink-0">
+          <canvas id="category-chart"></canvas>
+          <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <span id="chart-center-label" class="text-[11px] text-gray-400">카테고리</span>
+            <span id="chart-center-count" class="text-lg font-bold text-gray-800">0</span>
+          </div>
         </div>
-    </main>
+        <div id="chart-legend" class="flex-1 flex flex-col gap-1.5 text-[12.5px]"></div>
+      </div>
+      <p id="chart-empty" class="hidden text-center text-sm text-gray-400 py-6">이번 달 등록된 지출이 없어요</p>
+    </section>
 
-    <main id="view-settings" class="flex-1 overflow-y-auto hide-scrollbar pb-24 hidden bg-gray-50">
-        <div class="p-5">
-            <div class="flex items-center justify-between mb-6">
-                <h2 class="text-xl font-bold text-gray-900">앱 설정</h2>
-                <button onclick="switchView('view-list')" class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-700">
-                    <i class="ph ph-x"></i>
-                </button>
-            </div>
+    <!-- Recent list -->
+    <section class="mt-4">
+      <div class="flex items-center justify-between mb-2 px-1">
+        <h3 class="text-sm font-bold text-gray-800">최근 결제 내역</h3>
+        <span id="list-count" class="text-xs text-gray-400"></span>
+      </div>
+      <div id="recent-list" class="flex flex-col gap-2"></div>
+      <div id="list-empty" class="hidden flex-col items-center justify-center text-center py-14 text-gray-400">
+        <i class="ph ph-receipt text-4xl mb-2 text-gray-300"></i>
+        <p class="text-sm font-medium">아직 등록된 영수증이 없어요</p>
+        <p class="text-xs mt-1 text-gray-350">오른쪽 아래 카메라 버튼을 눌러 시작하세요</p>
+      </div>
+    </section>
+  </main>
 
-            <div class="space-y-6">
-                <!-- AI Key Section -->
-                <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                    <div class="flex items-center gap-2 mb-3">
-                        <div class="bg-purple-100 p-1.5 rounded-lg text-purple-600"><i class="ph-fill ph-magic-wand"></i></div>
-                        <h3 class="font-bold text-gray-800">1. AI 스캐너 연동 (무료)</h3>
-                    </div>
-                    <label class="block text-xs font-semibold text-gray-500 mb-1">Google Gemini API Key</label>
-                    <input type="password" id="setting-gemini-key" placeholder="AI Studio에서 발급받은 키 입력" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none transition mb-2">
-                    <p class="text-[11px] text-gray-400">키가 없으면 시뮬레이션 모드로 작동합니다.</p>
-                </div>
-
-                <!-- Google Sheet Setup Section -->
-                <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                    <div class="flex items-center gap-2 mb-3">
-                        <div class="bg-green-100 p-1.5 rounded-lg text-green-600"><i class="ph-fill ph-file-xls"></i></div>
-                        <h3 class="font-bold text-gray-800">2. 구글 시트 마스터 앱 스크립트</h3>
-                    </div>
-                    
-                    <label class="block text-xs font-semibold text-gray-500 mb-1">Google Apps Script Webhook URL</label>
-                    <input type="text" id="setting-webhook" placeholder="https://script.google.com/macros/s/..." class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-green-500 outline-none transition mb-3">
-                    
-                    <div class="border border-green-200 bg-green-50/50 rounded-xl p-3 text-xs text-gray-700 space-y-2 mb-2">
-                        <div class="font-bold text-green-800 flex items-center gap-1">
-                            <i class="ph-fill ph-info"></i> 매월 시트 자동 생성 및 합계 자동 삽입 기능 탑재!
-                        </div>
-                        <p>1. 구글 시트 메뉴: [확장 프로그램] ➔ [Apps Script]<br>2. 아래 버튼을 눌러 코드를 복사 후 붙여넣기<br>3. [배포] ➔ [새 배포] ➔ 웹 앱 ➔ 액세스 '모든 사용자'<br>4. 나온 URL을 위 입력칸에 붙여넣으세요.</p>
-                        <button type="button" onclick="copyGasScript()" class="w-full mt-2 py-2 bg-green-600 text-white font-semibold rounded-lg text-xs hover:bg-green-700 transition shadow-sm">
-                            <i class="ph ph-copy"></i> 통합 자동 연동 스크립트 복사
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Team Sheet IDs Section -->
-                <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                    <div class="flex items-center gap-2 mb-3">
-                        <div class="bg-blue-100 p-1.5 rounded-lg text-blue-600"><i class="ph-fill ph-users-three"></i></div>
-                        <h3 class="font-bold text-gray-800">3. 팀별 구글 시트 ID 등록</h3>
-                    </div>
-                    <p class="text-[11px] text-gray-500 mb-3 leading-tight">
-                        각 팀별 구글 시트 주소창에서 ID 부분만 복사해 넣으세요.<br>
-                        예: docs.google.com/spreadsheets/d/<b>이부분이_ID입니다</b>/edit
-                    </p>
-
-                    <div class="space-y-3">
-                        <div>
-                            <label class="block text-xs font-semibold text-gray-600 mb-1">U18 시트 ID</label>
-                            <input type="text" id="setting-sheet-U18" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-gray-600 mb-1">U15 시트 ID</label>
-                            <input type="text" id="setting-sheet-U15" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-gray-600 mb-1">U12 시트 ID</label>
-                            <input type="text" id="setting-sheet-U12" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-gray-600 mb-1">U18 치료실 시트 ID</label>
-                            <input type="text" id="setting-sheet-U18치료실" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-gray-600 mb-1">U15 치료실 시트 ID</label>
-                            <input type="text" id="setting-sheet-U15치료실" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="pt-2">
-                    <button onclick="saveSettings()" class="w-full bg-gray-900 text-white rounded-xl py-3.5 font-bold shadow-lg hover:bg-black transition">
-                        설정 저장하기
-                    </button>
-                    <button onclick="clearAllData()" class="w-full mt-3 bg-white text-red-500 border border-red-200 rounded-xl py-3.5 font-bold hover:bg-red-50 transition text-sm">
-                        앱 내 저장된 모든 캐시 삭제
-                    </button>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <button onclick="openForm()" id="fab-button" class="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-xl shadow-blue-600/40 flex items-center justify-center hover:bg-blue-700 transition transform hover:scale-105 z-40">
-        <i class="ph-bold ph-camera-plus text-2xl"></i>
-    </button>
-
-    <div id="toast-notification" class="hidden fixed top-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl shadow-lg text-sm font-semibold flex items-center gap-2 transition-all duration-300 opacity-0 pointer-events-none whitespace-nowrap">
-        <i class="ph-fill ph-check-circle text-lg"></i>
-        <span id="toast-message"></span>
+  <!-- ===================== VIEW 2: RECEIPT FORM ===================== -->
+  <main id="view-form" class="view hidden px-4 pt-4 pb-32">
+    <div class="flex items-center gap-3 mb-4">
+      <button id="btn-back" class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center"><i class="ph ph-arrow-left text-lg text-gray-700"></i></button>
+      <h2 id="form-title" class="text-base font-bold text-gray-900">영수증 등록</h2>
     </div>
 
-    <script>
-        // State Variables
-        let expenses = JSON.parse(localStorage.getItem('team_expenses_v2')) || [];
-        let pieChart = null;
-        let currentImageBase64 = null;
-        let currentImageType = 'image/jpeg';
-        let currentTeam = 'U18';
+    <!-- image capture -->
+    <div id="image-drop" class="rounded-2xl border-2 border-dashed border-gray-200 bg-white overflow-hidden">
+      <div id="image-empty-state" class="flex flex-col items-center justify-center py-8 px-4">
+        <div class="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center mb-3">
+          <i class="ph ph-camera text-2xl text-blue-600"></i>
+        </div>
+        <p class="text-sm text-gray-500 mb-4 text-center">영수증 사진을 촬영하거나<br/>앨범에서 선택하면 자동으로 입력돼요</p>
+        <div class="flex gap-2 w-full max-w-xs">
+          <label class="flex-1 cursor-pointer text-center text-sm font-semibold bg-blue-600 hover:bg-blue-700 transition text-white rounded-xl py-2.5">
+            <i class="ph ph-camera mr-1"></i> 카메라 촬영
+            <input id="input-camera" type="file" accept="image/*" capture="environment" class="hidden">
+          </label>
+          <label class="flex-1 cursor-pointer text-center text-sm font-semibold bg-gray-100 hover:bg-gray-200 transition text-gray-700 rounded-xl py-2.5">
+            <i class="ph ph-image mr-1"></i> 앨범 선택
+            <input id="input-gallery" type="file" accept="image/*" class="hidden">
+          </label>
+        </div>
+      </div>
+      <div id="image-preview-state" class="hidden relative">
+        <img id="image-preview" class="w-full h-48 object-cover" src="">
+        <button id="btn-reshoot" class="absolute top-2 right-2 bg-black/55 backdrop-blur text-white text-xs font-medium rounded-full px-3 py-1.5 flex items-center gap-1">
+          <i class="ph ph-arrow-clockwise"></i> 다시 촬영
+        </button>
+      </div>
+      <input id="input-reshoot" type="file" accept="image/*" class="hidden">
+    </div>
 
-        // Load Settings
-        const settingsKeys = ['gemini-key', 'webhook', 'sheet-U18', 'sheet-U15', 'sheet-U12', 'sheet-U18치료실', 'sheet-U15치료실'];
-        
-        window.onload = function() {
-            // Load saved settings
-            settingsKeys.forEach(key => {
-                const val = localStorage.getItem(`setting_${key}`);
-                if(val) document.getElementById(`setting-${key}`).value = val;
-            });
-            
-            // Set current month text
-            const today = new Date();
-            document.getElementById('current-month-text').innerText = `${today.getMonth() + 1}월`;
-            
-            // Load Last Selected Team
-            const savedTeam = localStorage.getItem('last_selected_team');
-            if(savedTeam) {
-                currentTeam = savedTeam;
-                document.getElementById('global-team-selector').value = currentTeam;
-            }
-            
-            filterDataByTeam();
-        };
+    <!-- fields -->
+    <div class="mt-5 flex flex-col gap-4">
+      <div>
+        <label class="text-xs font-semibold text-gray-500 mb-1.5 block">결제일자</label>
+        <input id="field-date" type="date" class="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-3 text-sm font-medium text-gray-800">
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-gray-500 mb-1.5 block">결제금액</label>
+        <div class="relative">
+          <input id="field-amount" type="number" inputmode="numeric" placeholder="0" class="w-full bg-white border border-gray-200 rounded-xl pl-3.5 pr-10 py-3 text-sm font-medium text-gray-800">
+          <span class="absolute right-3.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">원</span>
+        </div>
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-gray-500 mb-1.5 block">카테고리</label>
+        <select id="field-category" class="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-3 text-sm font-medium text-gray-800"></select>
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-gray-500 mb-1.5 block">사용처</label>
+        <input id="field-shop" type="text" placeholder="예: 댓잎갈비" class="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-3 text-sm font-medium text-gray-800">
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-gray-500 mb-1.5 block">사용내역</label>
+        <textarea id="field-items" rows="2" placeholder="예: 코칭스태프 중식 5인" class="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-3 text-sm font-medium text-gray-800 resize-none"></textarea>
+      </div>
+    </div>
 
-        function showToast(message, isSuccess = true) {
-            const toast = document.getElementById('toast-notification');
-            const toastMsg = document.getElementById('toast-message');
-            toastMsg.innerText = message;
-            toast.className = `fixed top-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl shadow-lg text-sm font-semibold flex items-center gap-2 transition-all duration-300 ${isSuccess ? 'bg-gray-900 text-white' : 'bg-red-600 text-white'}`;
-            toast.classList.remove('hidden', 'opacity-0');
-            setTimeout(() => {
-                toast.classList.add('opacity-0');
-                setTimeout(() => toast.classList.add('hidden'), 300);
-            }, 3000);
-        }
+    <div class="mt-6 flex gap-2">
+      <button id="btn-delete" class="hidden w-14 shrink-0 rounded-xl bg-red-50 text-red-500 flex items-center justify-center">
+        <i class="ph ph-trash text-lg"></i>
+      </button>
+      <button id="btn-submit" class="flex-1 bg-blue-600 hover:bg-blue-700 transition text-white font-bold text-sm rounded-xl py-3.5">저장하기</button>
+    </div>
+  </main>
 
-        function switchView(viewId) {
-            document.getElementById('view-list').classList.add('hidden');
-            document.getElementById('view-form').classList.add('hidden');
-            document.getElementById('view-settings').classList.add('hidden');
-            document.getElementById(viewId).classList.remove('hidden');
-            
-            const fab = document.getElementById('fab-button');
-            if (viewId === 'view-list') {
-                fab.classList.remove('hidden');
-                filterDataByTeam(); // Refresh Dashboard when returning
-            } else {
-                fab.classList.add('hidden');
-            }
-        }
+  <!-- AI scanning overlay -->
+  <div id="scan-overlay" class="hidden fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex flex-col items-center justify-center gap-3">
+    <div class="spinner"></div>
+    <p class="text-white text-sm font-semibold">AI가 영수증을 분석하고 있어요…</p>
+    <p class="text-blue-200 text-xs">날짜·금액·상호명을 자동으로 읽는 중</p>
+  </div>
 
-        function saveSettings() {
-            settingsKeys.forEach(key => {
-                localStorage.setItem(`setting_${key}`, document.getElementById(`setting-${key}`).value);
-            });
-            showToast('설정이 저장되었습니다.');
-            switchView('view-list');
-        }
+  <!-- FAB -->
+  <button id="btn-fab" class="fixed z-30 bottom-6 right-6 w-15 h-15 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 fab-shadow flex items-center justify-center active:scale-95 transition" style="width:58px;height:58px; max-width:480px;">
+    <i class="ph-bold ph-camera-plus text-white text-2xl"></i>
+  </button>
 
-        function clearAllData() {
-            if(confirm('앱 내에 저장된 내역 캐시를 모두 지우시겠습니까? (구글 시트 데이터는 지워지지 않습니다)')) {
-                expenses = [];
-                localStorage.removeItem('team_expenses_v2');
-                saveExpensesLocal();
-                showToast('내역이 삭제되었습니다.');
-                filterDataByTeam();
-                switchView('view-list');
-            }
-        }
+  <!-- ===================== SETTINGS MODAL ===================== -->
+  <div id="modal-settings" class="hidden fixed inset-0 z-40 modal-backdrop">
+    <div class="absolute inset-0 bg-black/40" id="settings-backdrop-close"></div>
+    <div class="modal-sheet absolute bottom-0 left-0 right-0 max-w-[480px] mx-auto bg-white rounded-t-3xl max-h-[88vh] flex flex-col">
+      <div class="px-5 pt-4 pb-2 flex items-center justify-between border-b border-gray-100">
+        <h3 class="text-base font-bold text-gray-900">앱 설정</h3>
+        <button id="btn-close-settings" class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"><i class="ph ph-x text-gray-600"></i></button>
+      </div>
+      <div class="px-5 py-4 overflow-y-auto flex flex-col gap-5">
 
-        function saveExpensesLocal() {
-            localStorage.setItem('team_expenses_v2', JSON.stringify(expenses));
-        }
+        <div>
+          <label class="text-xs font-semibold text-gray-500 mb-1.5 block">Gemini API Key</label>
+          <input id="settings-api-key" type="password" placeholder="AIza..." class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm">
+          <p class="text-[11px] text-gray-400 mt-1.5">비워두면 시뮬레이션 모드로 동작해요.</p>
+        </div>
 
-        // Handle Team Change
-        function filterDataByTeam() {
-            currentTeam = document.getElementById('global-team-selector').value;
-            localStorage.setItem('last_selected_team', currentTeam);
-            
-            document.getElementById('current-team-text').innerText = currentTeam;
-            document.getElementById('form-team-label').innerText = currentTeam;
-            
-            // Filter expenses for selected team
-            const teamExpenses = expenses.filter(ex => ex.team === currentTeam);
-            
-            // Update Dashboard
-            renderDashboard(teamExpenses);
-        }
+        <div>
+          <label class="text-xs font-semibold text-gray-500 mb-1.5 block">Apps Script Webhook URL</label>
+          <input id="settings-webhook" type="text" placeholder="https://script.google.com/macros/s/.../exec" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm">
+        </div>
 
-        const categoryColors = {
-            '식사비': '#3B82F6',
-            '간식비': '#10B981',
-            '연습경기 간식비': '#F59E0B',
-            '리그경기 간식비': '#EF4444',
-            '의료/비품비': '#8B5CF6',
-            '기타': '#6B7280'
-        };
-        const categoryIcons = {
-            '식사비': '🍚', '간식비': '🍩', '연습경기 간식비': '⚽', '리그경기 간식비': '🏆', '의료/비품비': '🩹', '기타': '📝'
-        };
+        <div>
+          <label class="text-xs font-semibold text-gray-500 mb-2 block">팀별 구글 시트 ID</label>
+          <div id="settings-sheet-ids" class="flex flex-col gap-2.5"></div>
+        </div>
 
-        function renderDashboard(teamExpenses) {
-            const listEl = document.getElementById('expense-list');
-            listEl.innerHTML = '';
-            
-            const currentMonth = new Date().getMonth();
-            const currentYear = new Date().getFullYear();
-            
-            // Filter current month
-            const monthlyExpenses = teamExpenses.filter(ex => {
-                const exDate = new Date(ex.date);
-                return exDate.getMonth() === currentMonth && exDate.getFullYear() === currentYear;
-            });
+        <button id="btn-copy-script" class="w-full flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 transition text-white text-sm font-semibold rounded-xl py-3">
+          <i class="ph ph-copy"></i> 통합 Apps Script 코드 복사
+        </button>
+        <p class="text-[11px] text-gray-400 -mt-3 text-center leading-relaxed">팀 시트의 확장 프로그램 &gt; Apps Script에 붙여넣고<br/>웹앱으로 배포한 뒤, 위 Webhook URL에 입력하세요.</p>
 
-            // Total Amount
-            const total = monthlyExpenses.reduce((sum, ex) => sum + ex.amount, 0);
-            document.getElementById('total-expense').innerText = total.toLocaleString();
-            document.getElementById('receipt-count').innerText = monthlyExpenses.length;
+        <div class="pt-4 border-t border-gray-100">
+          <label class="text-xs font-semibold text-gray-500 mb-1.5 block">관리자 PIN (선택)</label>
+          <input id="settings-admin-pin" type="text" inputmode="numeric" placeholder="예: 1234 (설정하면 이 PIN을 아는 사람만 설정 화면을 열 수 있어요)" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm">
+        </div>
 
-            // List Render (Show last 15)
-            const recent = [...teamExpenses].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 15);
-            
-            if (recent.length === 0) {
-                listEl.innerHTML = '<div class="text-center py-8 text-gray-400 text-sm">등록된 내역이 없습니다.</div>';
-            } else {
-                recent.forEach(ex => {
-                    const el = document.createElement('div');
-                    el.className = "bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-3 cursor-pointer hover:bg-gray-50";
-                    el.onclick = () => openForm(ex);
-                    el.innerHTML = `
-                        <div class="w-12 h-12 rounded-full flex items-center justify-center text-xl shadow-inner" style="background-color: ${categoryColors[ex.category]}15; color: ${categoryColors[ex.category]}">
-                            ${categoryIcons[ex.category] || '📝'}
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <div class="text-xs text-gray-400 mb-0.5">${ex.date.split('-').slice(1).join('/')}</div>
-                            <div class="font-bold text-gray-800 truncate leading-tight">${ex.shopName}</div>
-                            <div class="text-[11px] text-gray-500 truncate mt-0.5">${ex.items || ex.category}</div>
-                        </div>
-                        <div class="text-right">
-                            <div class="font-extrabold text-gray-900 tracking-tight">₩${ex.amount.toLocaleString()}</div>
-                            ${ex.imageBase64 ? '<i class="ph-fill ph-image text-blue-500 text-xs mt-1"></i>' : ''}
-                        </div>
-                    `;
-                    listEl.appendChild(el);
-                });
-            }
+        <button id="btn-export-settings" class="w-full flex items-center justify-center gap-2 bg-indigo-50 hover:bg-indigo-100 transition text-indigo-700 text-sm font-semibold rounded-xl py-3">
+          <i class="ph ph-code"></i> 관리자 설정을 코드로 내보내기
+        </button>
+        <p class="text-[11px] text-gray-400 -mt-3 text-center leading-relaxed">지금 입력한 값들을 코드로 복사합니다. index.html의<br/><code class="bg-gray-100 px-1 rounded">BAKED_SETTINGS</code> 부분에 붙여넣고 GitHub에 다시 올리면<br/>다른 사람들은 설정 없이 바로 사용할 수 있어요.</p>
+      </div>
+      <div class="px-5 py-4 border-t border-gray-100">
+        <button id="btn-save-settings" class="w-full bg-blue-600 hover:bg-blue-700 transition text-white font-bold text-sm rounded-xl py-3.5">저장하고 닫기</button>
+      </div>
+    </div>
+  </div>
 
-            // Chart Render
-            const catTotals = {};
-            monthlyExpenses.forEach(ex => {
-                catTotals[ex.category] = (catTotals[ex.category] || 0) + ex.amount;
-            });
+  <!-- Toast -->
+  <div id="toast" class="toast hidden fixed z-50 bottom-24 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[13px] font-medium rounded-full px-4 py-2.5 shadow-lg whitespace-nowrap"></div>
 
-            const labels = Object.keys(catTotals);
-            const data = Object.values(catTotals);
-            
-            document.getElementById('no-chart-data').classList.toggle('hidden', data.length > 0);
-            
-            if (pieChart) pieChart.destroy();
-            const ctx = document.getElementById('pieChart').getContext('2d');
-            
-            if(data.length > 0) {
-                pieChart = new Chart(ctx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            data: data,
-                            backgroundColor: labels.map(l => categoryColors[l] || categoryColors['기타']),
-                            borderWidth: 0,
-                            hoverOffset: 4
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        cutout: '70%',
-                        plugins: {
-                            legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 6, font: { size: 11, family: 'Inter' } } }
-                        }
-                    }
-                });
-            }
-        }
+</div>
 
-        // Image Compression
-        function compressImage(file) {
-            return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = (event) => {
-                    const img = new Image();
-                    img.src = event.target.result;
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        let width = img.width;
-                        let height = img.height;
-                        const maxDim = 1200; // max resolution
-                        if (width > maxDim || height > maxDim) {
-                            if (width > height) {
-                                height = Math.round((height * maxDim) / width);
-                                width = maxDim;
-                            } else {
-                                width = Math.round((width * maxDim) / height);
-                                height = maxDim;
-                            }
-                        }
-                        canvas.width = width;
-                        canvas.height = height;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0, width, height);
-                        resolve(canvas.toDataURL('image/jpeg', 0.8));
-                    };
-                };
-            });
-        }
+<script>
+/* =========================================================================
+   CONSTANTS
+   ========================================================================= */
+const TEAMS = ['U18', 'U15', 'U12', 'U18 치료실', 'U15 치료실'];
+const CATEGORIES = ['식사비', '간식비', '연습경기 간식비', '리그경기 간식비', '의료/비품비', '기타'];
+const CATEGORY_META = {
+  '식사비':          { icon: 'ph-fork-knife',    color: '#2563eb' },
+  '간식비':          { icon: 'ph-cookie',        color: '#6366f1' },
+  '연습경기 간식비': { icon: 'ph-soccer-ball',   color: '#0891b2' },
+  '리그경기 간식비': { icon: 'ph-trophy',        color: '#7c3aed' },
+  '의료/비품비':     { icon: 'ph-first-aid-kit', color: '#dc2626' },
+  '기타':            { icon: 'ph-dots-three-circle', color: '#6b7280' }
+};
+// ⚙️ 관리자 전용 기본 설정값. 설정 모달에서 값을 채운 뒤 "관리자 설정을 코드로 내보내기"
+// 버튼으로 복사한 코드를 이 객체 자리에 붙여넣고 GitHub에 다시 커밋하면, 그 이후로는
+// 어떤 브라우저/기기로 접속하든(로컬 설정이 없는 사람은) 이 값이 자동으로 적용됩니다.
+// adminPin을 설정해두면, 설정 화면은 이 PIN을 아는 관리자만 열 수 있습니다.
+const BAKED_SETTINGS = {
+  geminiApiKey: '',
+  webhookUrl: '',
+  sheetIds: { 'U18': '', 'U15': '', 'U12': '', 'U18 치료실': '', 'U15 치료실': '' },
+  adminPin: ''
+};
+const LS_SETTINGS = 'tbs_settings';
+const LS_EXPENSES = 'tbs_expenses';
+const LS_TEAM = 'tbs_current_team';
+const SS_ADMIN_UNLOCKED = 'tbs_admin_unlocked'; // 세션 동안만 유지 (sessionStorage)
 
-        // File Input & AI Scan
-        document.getElementById('file-input').addEventListener('change', async function(e) {
-            if (!e.target.files || !e.target.files[0]) return;
-            
-            const file = e.target.files[0];
-            const scanLine = document.getElementById('scan-line');
-            const loadingOverlay = document.getElementById('loading-overlay');
-            const statusText = document.getElementById('loading-status-text');
-            
-            scanLine.style.display = 'block';
-            
-            const compressedDataUrl = await compressImage(file);
-            currentImageBase64 = compressedDataUrl;
-            currentImageType = 'image/jpeg';
+/* =========================================================================
+   STATE
+   ========================================================================= */
+let settings = loadSettings();
+let expenses = loadExpenses();
+let currentTeam = localStorage.getItem(LS_TEAM) || TEAMS[0];
+let currentImage = null;      // { base64, mimeType, dataUrl }
+let editingId = null;
+let chartInstance = null;
 
-            document.getElementById('image-preview').src = compressedDataUrl;
-            document.getElementById('image-preview-container').classList.remove('hidden');
+/* =========================================================================
+   PERSISTENCE
+   ========================================================================= */
+function loadSettings() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LS_SETTINGS));
+    if (!raw) return JSON.parse(JSON.stringify(BAKED_SETTINGS));
+    return { ...BAKED_SETTINGS, ...raw, sheetIds: { ...BAKED_SETTINGS.sheetIds, ...(raw.sheetIds || {}) } };
+  } catch { return JSON.parse(JSON.stringify(BAKED_SETTINGS)); }
+}
+function saveSettings() { localStorage.setItem(LS_SETTINGS, JSON.stringify(settings)); }
 
-            loadingOverlay.classList.remove('hidden');
-            statusText.innerText = 'AI가 영수증 분석 중...';
+function loadExpenses() {
+  try { return JSON.parse(localStorage.getItem(LS_EXPENSES)) || []; }
+  catch { return []; }
+}
+function saveExpenses() { localStorage.setItem(LS_EXPENSES, JSON.stringify(expenses)); }
 
-            const apiKey = localStorage.getItem('setting_gemini-key') || '';
-            const base64Data = compressedDataUrl.split(',')[1];
+/* =========================================================================
+   INIT
+   ========================================================================= */
+function init() {
+  // team select
+  const teamSel = document.getElementById('team-select');
+  teamSel.innerHTML = TEAMS.map(t => `<option value="${t}" ${t === currentTeam ? 'selected' : ''}>${t}</option>`).join('');
+  teamSel.addEventListener('change', e => {
+    currentTeam = e.target.value;
+    localStorage.setItem(LS_TEAM, currentTeam);
+    renderDashboard();
+  });
 
-            let parsedData = null;
+  // category select
+  const catSel = document.getElementById('field-category');
+  catSel.innerHTML = CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('');
 
-            if (apiKey) {
-                try {
-                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-                    const prompt = `이 영수증 이미지에서 다음 정보를 추출해 JSON 형식으로만 응답해.
-                    반드시 마크다운 없이 순수 JSON 중괄호 {} 구조만 출력해.
-                    필드:
-                    1. "date": YYYY-MM-DD 형식 결제일자
-                    2. "amount": 숫자만 (총액)
-                    3. "shopName": 상호명 (예: 댓잎갈비, 카페트리)
-                    4. "items": 대표 주문품목 또는 적요 (예: 코칭스태프 중식, 리그경기 간식)
-                    5. "category": 다음 중 1개 선택 (식사비, 간식비, 연습경기 간식비, 리그경기 간식비, 의료/비품비, 기타). 모르겠으면 기타`;
+  bindEvents();
+  renderDashboard();
+}
 
-                    const payload = {
-                        contents: [{
-                            parts: [
-                                { text: prompt },
-                                { inlineData: { mimeType: "image/jpeg", data: base64Data } }
-                            ]
-                        }]
-                    };
+/* =========================================================================
+   VIEW NAVIGATION
+   ========================================================================= */
+function showView(name) {
+  document.getElementById('view-dashboard').classList.toggle('hidden', name !== 'dashboard');
+  document.getElementById('view-form').classList.toggle('hidden', name !== 'form');
+  document.getElementById('btn-fab').classList.toggle('hidden', name !== 'dashboard');
+}
 
-                    const response = await fetch(apiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
+function openForm(expense = null) {
+  editingId = expense ? expense.id : null;
+  currentImage = expense && expense.imageBase64 ? { base64: expense.imageBase64, mimeType: expense.imageType, dataUrl: `data:${expense.imageType};base64,${expense.imageBase64}` } : null;
 
-                    const result = await response.json();
-                    let textResult = result.candidates[0].content.parts[0].text;
-                    textResult = textResult.replace(/```json/g, '').replace(/```/g, '').trim();
-                    parsedData = JSON.parse(textResult);
+  document.getElementById('form-title').textContent = expense ? '영수증 수정' : '영수증 등록';
+  document.getElementById('btn-delete').classList.toggle('hidden', !expense);
+  document.getElementById('field-date').value = expense ? expense.date : new Date().toISOString().slice(0, 10);
+  document.getElementById('field-amount').value = expense ? expense.amount : '';
+  document.getElementById('field-category').value = expense ? expense.category : CATEGORIES[0];
+  document.getElementById('field-shop').value = expense ? expense.shopName : '';
+  document.getElementById('field-items').value = expense ? expense.items : '';
 
-                } catch (error) {
-                    console.error("AI API 오류:", error);
-                    alert("AI 스캔 실패. 수동으로 입력해주세요.");
-                }
-            } else {
-                // Simulation Mode
-                await new Promise(r => setTimeout(r, 1500));
-                parsedData = {
-                    date: new Date().toISOString().split('T')[0],
-                    amount: 97000,
-                    shopName: '댓잎갈비 (시뮬레이션)',
-                    items: '코칭스테프 & 송병주샘 중식비',
-                    category: '식사비'
-                };
-            }
+  renderImageState();
+  showView('form');
+}
 
-            if (parsedData) {
-                if(parsedData.date) document.getElementById('entry-date').value = parsedData.date;
-                if(parsedData.amount) document.getElementById('entry-amount').value = parsedData.amount;
-                if(parsedData.shopName) document.getElementById('entry-shopName').value = parsedData.shopName;
-                if(parsedData.items) document.getElementById('entry-items').value = parsedData.items;
-                
-                if(parsedData.category) {
-                    const catSelect = document.getElementById('entry-category');
-                    Array.from(catSelect.options).forEach(opt => {
-                        if(opt.value === parsedData.category) opt.selected = true;
-                    });
-                }
-                showToast('스캔 완료! 내역을 확인하고 저장해주세요.');
-            }
+function renderImageState() {
+  const empty = document.getElementById('image-empty-state');
+  const preview = document.getElementById('image-preview-state');
+  if (currentImage) {
+    empty.classList.add('hidden');
+    preview.classList.remove('hidden');
+    document.getElementById('image-preview').src = currentImage.dataUrl;
+  } else {
+    empty.classList.remove('hidden');
+    preview.classList.add('hidden');
+  }
+}
 
-            scanLine.style.display = 'none';
-            loadingOverlay.classList.add('hidden');
-        });
+/* =========================================================================
+   DASHBOARD RENDERING
+   ========================================================================= */
+function getTeamExpenses(team) {
+  return expenses.filter(e => e.team === team).sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+}
+function isThisMonth(dateStr) {
+  const now = new Date();
+  const d = new Date(dateStr);
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+}
 
-        // Form Submit -> Save to Local & Send to Google Sheets Webhook
-        function openForm(data = null) {
-            const form = document.getElementById('expense-form');
-            form.reset();
-            document.getElementById('entry-id').value = '';
-            
-            document.getElementById('form-team-label').innerText = currentTeam;
-            document.getElementById('save-btn-text').innerText = `${currentTeam} 시트에 저장하기`;
+function renderDashboard() {
+  const teamExpenses = getTeamExpenses(currentTeam);
+  const monthExpenses = teamExpenses.filter(e => isThisMonth(e.date));
 
-            if (data) {
-                document.getElementById('entry-date').value = data.date || '';
-                document.getElementById('entry-amount').value = data.amount || '';
-                document.getElementById('entry-category').value = data.category || '';
-                document.getElementById('entry-shopName').value = data.shopName || '';
-                document.getElementById('entry-items').value = data.items || '';
-                currentImageBase64 = data.imageBase64 ? `data:${data.imageType};base64,${data.imageBase64}` : null;
-                
-                if (currentImageBase64) {
-                    document.getElementById('image-preview').src = currentImageBase64;
-                    document.getElementById('image-preview-container').classList.remove('hidden');
-                } else {
-                    document.getElementById('image-preview-container').classList.add('hidden');
-                }
-            } else {
-                currentImageBase64 = null;
-                document.getElementById('entry-date').value = new Date().toISOString().split('T')[0];
-                document.getElementById('image-preview-container').classList.add('hidden');
-            }
-            
-            switchView('view-form');
-        }
+  const total = monthExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  document.getElementById('summary-month-label').textContent = `${currentTeam} · ${new Date().getMonth() + 1}월 지출`;
+  document.getElementById('summary-total').textContent = total.toLocaleString('ko-KR') + '원';
+  document.getElementById('summary-count').textContent = monthExpenses.length + '건';
 
-        document.getElementById('expense-form').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const btn = document.querySelector('button[type="submit"]');
-            const originalBtnHtml = btn.innerHTML;
-            btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> 저장 및 연동 중...';
-            btn.disabled = true;
+  renderChart(monthExpenses);
+  renderRecentList(teamExpenses);
+}
 
-            const id = document.getElementById('entry-id').value || Date.now().toString();
-            const date = document.getElementById('entry-date').value;
-            const amount = parseInt(document.getElementById('entry-amount').value);
-            const category = document.getElementById('entry-category').value;
-            const shopName = document.getElementById('entry-shopName').value;
-            const items = document.getElementById('entry-items').value;
+function renderChart(monthExpenses) {
+  const totals = {};
+  CATEGORIES.forEach(c => totals[c] = 0);
+  monthExpenses.forEach(e => { totals[e.category] = (totals[e.category] || 0) + Number(e.amount || 0); });
 
-            // Base64 Strip
-            let pureBase64 = null;
-            if (currentImageBase64 && currentImageBase64.includes(',')) {
-                pureBase64 = currentImageBase64.split(',')[1];
-            } else if (currentImageBase64) {
-                pureBase64 = currentImageBase64; // already stripped
-            }
+  const activeCats = CATEGORIES.filter(c => totals[c] > 0);
+  const chartWrap = document.getElementById('chart-wrap');
+  const emptyMsg = document.getElementById('chart-empty');
 
-            const expense = { 
-                id, 
-                team: currentTeam,
-                date, 
-                amount, 
-                category, 
-                shopName, 
-                items,
-                imageBase64: pureBase64,
-                imageType: currentImageType || 'image/jpeg'
-            };
+  if (activeCats.length === 0) {
+    chartWrap.classList.add('hidden');
+    emptyMsg.classList.remove('hidden');
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+    return;
+  }
+  chartWrap.classList.remove('hidden');
+  emptyMsg.classList.add('hidden');
 
-            const existingIndex = expenses.findIndex(ex => ex.id === id);
-            if (existingIndex > -1) expenses[existingIndex] = expense;
-            else expenses.push(expense);
+  document.getElementById('chart-center-count').textContent = activeCats.length;
+  document.getElementById('chart-center-label').textContent = '카테고리';
 
-            saveExpensesLocal();
+  const ctx = document.getElementById('category-chart').getContext('2d');
+  const data = activeCats.map(c => totals[c]);
+  const colors = activeCats.map(c => CATEGORY_META[c].color);
 
-            // Send to Google Sheet logic
-            const webhookUrl = localStorage.getItem('setting_webhook');
-            const targetSheetId = localStorage.getItem(`setting_sheet-${currentTeam}`);
-            
-            if (webhookUrl && targetSheetId) {
-                try {
-                    // Inject target sheet ID into payload
-                    const payload = { ...expense, sheetId: targetSheetId };
-                    
-                    await fetch(webhookUrl, {
-                        method: 'POST',
-                        mode: 'no-cors', // Because Google Apps Script standard CORS issue
-                        headers: { 'Content-Type': 'text/plain' },
-                        body: JSON.stringify(payload)
-                    });
-                    
-                    showToast(`${currentTeam} 시트에 성공적으로 자동 저장되었습니다!`);
-                } catch(err) {
-                    console.log('Webhook Error', err);
-                    showToast(`[오류] 구글 시트 연동 실패. 네트워크를 확인하세요.`, false);
-                }
-            } else if (!targetSheetId) {
-                showToast(`[안내] 설정에 ${currentTeam} 시트 ID가 비어있어 폰에만 저장되었습니다.`);
-            } else {
-                showToast('앱 내에 저장되었습니다. (구글 연동 미설정)');
-            }
+  if (chartInstance) chartInstance.destroy();
+  chartInstance = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels: activeCats, datasets: [{ data, backgroundColor: colors, borderWidth: 3, borderColor: '#ffffff' }] },
+    options: {
+      cutout: '72%',
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `${c.label}: ${c.raw.toLocaleString('ko-KR')}원` } } }
+    }
+  });
 
-            btn.innerHTML = originalBtnHtml;
-            btn.disabled = false;
-            filterDataByTeam();
-            switchView('view-list');
-        });
+  const grandTotal = data.reduce((a, b) => a + b, 0);
+  document.getElementById('chart-legend').innerHTML = activeCats.map((c, i) => {
+    const pct = grandTotal ? Math.round((data[i] / grandTotal) * 100) : 0;
+    return `<div class="flex items-center justify-between gap-2">
+      <span class="flex items-center gap-1.5 text-gray-600"><span class="w-2 h-2 rounded-full shrink-0" style="background:${colors[i]}"></span>${c}</span>
+      <span class="font-semibold text-gray-800">${pct}%</span>
+    </div>`;
+  }).join('');
+}
 
-        // 🌟 Apps Script Helper Code - Advanced Multi-Sheet Version
-        function copyGasScript() {
-            const scriptCode = `// [팀 예산 스캐너 통합 앱 스크립트 - '양식' 탭 탑다운 기입 방식 적용]
+function renderRecentList(teamExpenses) {
+  const list = document.getElementById('recent-list');
+  const emptyState = document.getElementById('list-empty');
+  document.getElementById('list-count').textContent = teamExpenses.length ? `총 ${teamExpenses.length}건` : '';
+
+  if (teamExpenses.length === 0) {
+    list.innerHTML = '';
+    list.classList.add('hidden');
+    emptyState.classList.remove('hidden');
+    emptyState.classList.add('flex');
+    return;
+  }
+  list.classList.remove('hidden');
+  emptyState.classList.add('hidden');
+
+  list.innerHTML = teamExpenses.slice(0, 30).map(e => {
+    const meta = CATEGORY_META[e.category] || CATEGORY_META['기타'];
+    const dateLabel = e.date.slice(5).replace('-', '.');
+    return `<button data-id="${e.id}" class="recent-item w-full flex items-center gap-3 bg-white rounded-2xl p-3 border border-gray-100 text-left active:bg-gray-50 transition">
+      <div class="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style="background:${meta.color}1A">
+        <i class="ph-fill ${meta.icon} text-lg" style="color:${meta.color}"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-1.5">
+          <p class="text-sm font-semibold text-gray-900 truncate">${escapeHtml(e.shopName || '상호명 없음')}</p>
+          ${e.imageBase64 ? '<i class="ph-fill ph-image text-[11px] text-gray-300"></i>' : ''}
+        </div>
+        <p class="text-xs text-gray-400 mt-0.5">${dateLabel} · ${e.category}</p>
+      </div>
+      <p class="text-sm font-bold text-gray-900 shrink-0">${Number(e.amount || 0).toLocaleString('ko-KR')}원</p>
+    </button>`;
+  }).join('');
+
+  list.querySelectorAll('.recent-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const exp = expenses.find(x => x.id === btn.dataset.id);
+      if (exp) openForm(exp);
+    });
+  });
+}
+
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+/* =========================================================================
+   IMAGE HANDLING + COMPRESSION
+   ========================================================================= */
+async function handleFileSelect(file) {
+  if (!file) return;
+  try {
+    const source = await loadImageSource(file);
+    compressAndScan(source);
+  } catch (err) {
+    console.error(err);
+    // HEIC 등 브라우저가 디코딩하지 못하는 형식일 때 안내
+    const isLikelyHeic = /heic|heif/i.test(file.type) || /\.heic$|\.heif$/i.test(file.name || '');
+    if (isLikelyHeic) {
+      showToast('이 사진 형식(HEIC)은 지원되지 않아요. 아이폰 카메라 설정을 "높은 호환성"으로 바꾸거나 다른 사진을 선택해주세요', 'error');
+    } else {
+      showToast('이미지를 불러오지 못했어요. 다른 사진으로 다시 시도해주세요', 'error');
+    }
+  }
+}
+
+// EXIF 방향 정보를 자동으로 반영해 이미지를 로드합니다 (카메라로 찍은 세로 사진이
+// 옆으로 눕거나 뒤집혀서 AI가 글자를 못 읽는 문제를 방지합니다).
+async function loadImageSource(file) {
+  if ('createImageBitmap' in window) {
+    try {
+      return await createImageBitmap(file, { imageOrientation: 'from-image' });
+    } catch (e) {
+      // 일부 브라우저/포맷(HEIC 등)은 createImageBitmap이 실패할 수 있어 아래로 폴백
+    }
+  }
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('이미지 디코딩 실패'));
+      img.src = ev.target.result;
+    };
+    reader.onerror = () => reject(new Error('파일 읽기 실패'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function compressAndScan(source) {
+  const MAX = 1600; // 글자 인식 정확도를 위해 기존보다 여유있게 확보
+  let width = source.width, height = source.height;
+  if (width > MAX || height > MAX) {
+    const scale = MAX / Math.max(width, height);
+    width = Math.round(width * scale);
+    height = Math.round(height * scale);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width; canvas.height = height;
+  canvas.getContext('2d').drawImage(source, 0, 0, width, height);
+  const outType = 'image/jpeg';
+  const compressedDataUrl = canvas.toDataURL(outType, 0.92);
+  const base64 = compressedDataUrl.split(',')[1];
+
+  if (source.close) source.close(); // ImageBitmap 메모리 해제
+
+  currentImage = { base64, mimeType: outType, dataUrl: compressedDataUrl };
+  renderImageState();
+  scanReceipt(base64, outType);
+}
+
+/* =========================================================================
+   GEMINI API SCAN
+   ========================================================================= */
+async function scanReceipt(base64, mimeType) {
+  document.getElementById('scan-overlay').classList.remove('hidden');
+  try {
+    let data;
+    if (settings.geminiApiKey) {
+      try {
+        data = await callGeminiApi(base64, mimeType);
+      } catch (firstErr) {
+        console.warn('1차 스캔 실패, 재시도합니다', firstErr);
+        data = await callGeminiApi(base64, mimeType); // 네트워크/일시 오류 대비 1회 재시도
+      }
+    } else {
+      data = await simulateScan();
+    }
+    fillFormFromScan(data);
+    showToast(settings.geminiApiKey ? 'AI 분석이 완료됐어요' : '시뮬레이션 데이터로 채워졌어요', 'success');
+  } catch (err) {
+    console.error(err);
+    showToast('스캔에 실패했어요. 직접 입력해주세요.', 'error');
+  } finally {
+    document.getElementById('scan-overlay').classList.add('hidden');
+  }
+}
+
+async function callGeminiApi(base64, mimeType) {
+  const prompt = `너는 한국 영수증 전문 OCR 어시스턴트야. 아래 영수증 이미지를 최대한 정확히 읽어서 반드시 아래 JSON 형식으로만 응답해. 코드블록(\`\`\`)이나 설명 문장은 절대 포함하지 마.
+{
+  "date": "YYYY-MM-DD",
+  "amount": 숫자(콤마/원 기호 없이 정수),
+  "shopName": "상호명",
+  "items": "주문 품목 및 비고",
+  "category": "식사비 | 간식비 | 연습경기 간식비 | 리그경기 간식비 | 의료/비품비 | 기타 중 하나"
+}
+규칙:
+- amount는 영수증의 "합계/총액/받을금액" 중 최종 결제 금액을 사용해.
+- 날짜를 찾을 수 없으면 오늘 날짜(${new Date().toISOString().slice(0,10)})를 사용해.
+- category는 반드시 제시된 6개 값 중 하나여야 해.
+- 이미지가 흐리거나 일부만 보여도, 보이는 글자를 최대한 근거로 최선의 추정값을 채워줘.`;
+
+  // gemini-flash-latest는 Google이 관리하는 별칭으로, 특정 모델 버전이 만료/교체되어도
+  // 항상 현재 사용 가능한 최신 flash 모델을 자동으로 가리켜 스캔 실패를 줄여줍니다.
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${settings.geminiApiKey}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: base64 } }] }],
+      generationConfig: { response_mime_type: 'application/json', temperature: 0.1 }
+    })
+  });
+  if (!res.ok) {
+    let detail = '';
+    try { detail = (await res.json())?.error?.message || ''; } catch {}
+    throw new Error(`Gemini API 오류 ${res.status}${detail ? ': ' + detail : ''}`);
+  }
+  const json = await res.json();
+  const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('빈 응답');
+  return JSON.parse(text.replace(/```json|```/g, '').trim());
+}
+
+function simulateScan() {
+  const samples = [
+    { date: new Date().toISOString().slice(0, 10), amount: 97000, shopName: '댓잎갈비', items: '코칭스태프 중식 5인', category: '식사비' },
+    { date: new Date().toISOString().slice(0, 10), amount: 32000, shopName: 'GS25 훈련장점', items: '음료 및 간식', category: '간식비' },
+    { date: new Date().toISOString().slice(0, 10), amount: 15000, shopName: '연습구장 매점', items: '연습경기 간식', category: '연습경기 간식비' },
+    { date: new Date().toISOString().slice(0, 10), amount: 210000, shopName: '온누리약국', items: '테이핑 및 파스', category: '의료/비품비' }
+  ];
+  const pick = samples[Math.floor(Math.random() * samples.length)];
+  return new Promise(resolve => setTimeout(() => resolve(pick), 1200));
+}
+
+function fillFormFromScan(data) {
+  if (data.date) document.getElementById('field-date').value = data.date;
+  if (data.amount != null) document.getElementById('field-amount').value = data.amount;
+  if (data.shopName) document.getElementById('field-shop').value = data.shopName;
+  if (data.items) document.getElementById('field-items').value = data.items;
+  if (data.category && CATEGORIES.includes(data.category)) document.getElementById('field-category').value = data.category;
+}
+
+/* =========================================================================
+   SUBMIT / DELETE
+   ========================================================================= */
+async function submitExpense() {
+  const date = document.getElementById('field-date').value;
+  const amount = Number(document.getElementById('field-amount').value);
+  const category = document.getElementById('field-category').value;
+  const shopName = document.getElementById('field-shop').value.trim();
+  const items = document.getElementById('field-items').value.trim();
+
+  if (!date) return showToast('결제일자를 입력해주세요', 'error');
+  if (!amount || amount <= 0) return showToast('결제금액을 입력해주세요', 'error');
+  if (!shopName) return showToast('사용처를 입력해주세요', 'error');
+
+  const expense = {
+    id: editingId || Date.now().toString(),
+    team: currentTeam,
+    date, amount, category, shopName, items,
+    imageBase64: currentImage ? currentImage.base64 : null,
+    imageType: currentImage ? currentImage.mimeType : null
+  };
+
+  if (editingId) {
+    const idx = expenses.findIndex(e => e.id === editingId);
+    if (idx !== -1) expenses[idx] = expense;
+  } else {
+    expenses.push(expense);
+  }
+  saveExpenses();
+  renderDashboard();
+  showView('dashboard');
+  showToast('저장되었어요', 'success');
+
+  syncToSheet(expense); // fire and forget
+}
+
+function deleteExpense() {
+  if (!editingId) return;
+  if (!confirm('이 영수증을 삭제할까요?')) return;
+  expenses = expenses.filter(e => e.id !== editingId);
+  saveExpenses();
+  renderDashboard();
+  showView('dashboard');
+  showToast('삭제되었어요', 'success');
+}
+
+async function syncToSheet(expense) {
+  const sheetId = settings.sheetIds[expense.team];
+  if (!settings.webhookUrl) return showToast('Webhook URL이 설정되지 않아 로컬에만 저장됐어요', 'info');
+  if (!sheetId) return showToast(`${expense.team}의 시트 ID가 설정되지 않았어요`, 'info');
+
+  try {
+    await fetch(settings.webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ sheetId, ...expense })
+    });
+    showToast('구글 시트에 동기화됐어요', 'success');
+  } catch (err) {
+    console.error(err);
+    showToast('시트 동기화에 실패했어요 (로컬 저장은 완료)', 'error');
+  }
+}
+
+/* =========================================================================
+   SETTINGS MODAL
+   ========================================================================= */
+// 관리자 PIN이 설정되어 있으면, PIN을 입력해야만 설정 화면을 열 수 있게 합니다.
+// PIN이 비어있으면(관리자가 아직 설정 전이면) 누구나 열 수 있습니다 — 최초 설정용.
+function checkAdminAccessAndOpen() {
+  if (!settings.adminPin) { openSettings(); return; }
+  if (sessionStorage.getItem(SS_ADMIN_UNLOCKED) === '1') { openSettings(); return; }
+  const input = prompt('관리자 PIN을 입력하세요');
+  if (input === null) return;
+  if (input === settings.adminPin) {
+    sessionStorage.setItem(SS_ADMIN_UNLOCKED, '1');
+    openSettings();
+  } else {
+    showToast('PIN이 올바르지 않아요', 'error');
+  }
+}
+
+function openSettings() {
+  document.getElementById('settings-api-key').value = settings.geminiApiKey || '';
+  document.getElementById('settings-webhook').value = settings.webhookUrl || '';
+  document.getElementById('settings-admin-pin').value = settings.adminPin || '';
+  const wrap = document.getElementById('settings-sheet-ids');
+  wrap.innerHTML = TEAMS.map(t => `
+    <div>
+      <label class="text-[11px] text-gray-400 mb-1 block">${t}</label>
+      <input data-team="${t}" type="text" placeholder="스프레드시트 ID" value="${settings.sheetIds[t] || ''}" class="sheet-id-input w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm">
+    </div>`).join('');
+  document.getElementById('modal-settings').classList.remove('hidden');
+}
+function closeSettings() { document.getElementById('modal-settings').classList.add('hidden'); }
+
+function saveSettingsForm() {
+  settings.geminiApiKey = document.getElementById('settings-api-key').value.trim();
+  settings.webhookUrl = document.getElementById('settings-webhook').value.trim();
+  settings.adminPin = document.getElementById('settings-admin-pin').value.trim();
+  document.querySelectorAll('.sheet-id-input').forEach(input => {
+    settings.sheetIds[input.dataset.team] = input.value.trim();
+  });
+  saveSettings();
+  closeSettings();
+  showToast('설정이 저장됐어요 (이 기기에만 적용)', 'success');
+}
+
+// 지금 입력된 설정을 BAKED_SETTINGS 코드 블록으로 만들어 클립보드에 복사합니다.
+// 이 코드를 index.html 소스의 BAKED_SETTINGS 자리에 붙여넣고 커밋하면
+// 로컬 설정이 없는 모든 사람에게 이 값이 기본값으로 적용됩니다.
+function exportSettingsCode() {
+  const geminiApiKey = document.getElementById('settings-api-key').value.trim();
+  const webhookUrl = document.getElementById('settings-webhook').value.trim();
+  const adminPin = document.getElementById('settings-admin-pin').value.trim();
+  const sheetIds = {};
+  document.querySelectorAll('.sheet-id-input').forEach(input => {
+    sheetIds[input.dataset.team] = input.value.trim();
+  });
+  const code = `const BAKED_SETTINGS = {
+  geminiApiKey: ${JSON.stringify(geminiApiKey)},
+  webhookUrl: ${JSON.stringify(webhookUrl)},
+  sheetIds: ${JSON.stringify(sheetIds, null, 2).replace(/\n/g, '\n  ')},
+  adminPin: ${JSON.stringify(adminPin)}
+};`;
+  navigator.clipboard.writeText(code)
+    .then(() => showToast('코드가 복사됐어요. index.html에 붙여넣고 커밋하세요', 'success'))
+    .catch(() => showToast('복사에 실패했어요. 브라우저 권한을 확인해주세요', 'error'));
+}
+
+const APPS_SCRIPT_CODE = `/**
+ * 팀 예산 스캐너 - Google Apps Script Webhook
+ * 이 코드를 팀 스프레드시트의 [확장 프로그램 > Apps Script]에 붙여넣고
+ * [배포 > 새 배포 > 웹 앱]으로 배포하세요. (액세스 권한: 모든 사용자)
+ * 배포된 웹 앱 URL을 앱 설정의 Webhook URL에 입력하면 연동이 완료됩니다.
+ *
+ * 기록 위치: A5(날짜) / B5(사용처) / C5(사용내역) / D5(금액) / E5(사진) 부터 시작해서,
+ * 해당 칸이 이미 차 있으면 자동으로 한 칸씩 아래로 내려가며 계속 쌓입니다.
+ */
+
+var TEMPLATE_SHEET_NAME = '양식';               // 매월 시트 생성 시 복제할 기본 양식 탭 이름
+var DRIVE_FOLDER_NAME = '팀예산스캐너_영수증';   // 영수증 이미지가 저장될 구글 드라이브 폴더 이름
+var START_ROW = 5;                              // 데이터가 시작되는 첫 번째 행
+
 function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
-    var sheetId = data.sheetId;
-    
-    if (!sheetId) return ContentService.createTextOutput("ERROR: 시트 ID 없음");
-    var ss = SpreadsheetApp.openById(sheetId);
-    
-    // 1. 전달받은 결제일자 기준 "YY.M월" 시트 이름 생성 (예: 26.9월, 26.10월)
-    var dateObj = new Date(data.date);
-    var yy = String(dateObj.getFullYear()).slice(-2);
-    var m = dateObj.getMonth() + 1;
-    var monthName = yy + "." + m + "월";
-    
-    var sheet = ss.getSheetByName(monthName);
-    
-    // 2. 해당 월의 시트가 없다면 "양식" 탭을 그대로 복제
-    if (!sheet) {
-      var templateSheet = ss.getSheetByName("양식");
-      
-      if (templateSheet) {
-        sheet = templateSheet.copyTo(ss);
-        sheet.setName(monthName);
-      } else {
-        // '양식' 탭이 아예 없을 경우 비상용 기본 폼 생성
-        sheet = ss.insertSheet(monthName);
-        sheet.appendRow(["", "날짜", "사용처", "사용 내역", "금액", "사진"]);
-        sheet.getRange("B1:F1").setBackground("#e0e0e0").setFontWeight("bold");
-        sheet.appendRow(["합계", "", "", "", "=SUM(E2:E)"]);
-        sheet.getRange(sheet.getLastRow(), 1, 1, 6).setBackground("#FDE68A").setFontWeight("bold");
-      }
-    }
-    
-    // 3. 사진 처리 (구글 드라이브 업로드 및 썸네일 수식 생성)
-    var photoCell = "";
+    var ss = SpreadsheetApp.openById(data.sheetId);
+    var sheet = getOrCreateMonthSheet(ss, data.date);
+
+    var imageUrl = '';
     if (data.imageBase64) {
-      try {
-        var blob = Utilities.newBlob(Utilities.base64Decode(data.imageBase64), data.imageType || "image/jpeg", "receipt_" + data.date + "_" + Date.now() + ".jpg");
-        var file = DriveApp.createFile(blob);
-        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-        photoCell = '=IMAGE("https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w800")';
-      } catch(e) {}
+      imageUrl = uploadImageToDrive(data.imageBase64, data.imageType, data.shopName, data.date);
     }
-    
-    // 4. 삽입할 배열 데이터 [A(빈칸), B(날짜), C(사용처), D(내역), E(금액), F(사진)]
-    var rowData = ["", data.date, data.shopName, data.items, data.amount, photoCell];
-    
-    // 5. [핵심] 양식 내에서 가장 위쪽의 빈칸을 찾아 채워넣기 (Top-Down)
-    var dataRange = sheet.getDataRange();
-    var values = dataRange.getValues();
-    var totalRow = -1;
-    var targetRow = -1;
-    
-    // a. '합계' 행 위치 찾기
-    for (var i = values.length - 1; i >= 0; i--) {
-      if (values[i].join("").indexOf("합계") > -1) {
-        totalRow = i + 1; 
-        break;
-      }
-    }
-    
-    // b. 상단 헤더 아래부터 '합계' 위까지 탐색하여 첫 번째 빈 줄 찾기
-    if (totalRow > 1) {
-      // 1번 인덱스(2행)부터 합계 윗줄까지 탐색
-      for (var i = 1; i < totalRow - 1; i++) {
-        // 날짜(B열)와 금액(E열)이 모두 비어있는 줄을 타겟으로 잡음
-        if (!values[i][1] && !values[i][4]) {
-          targetRow = i + 1; // Google Sheet는 1부터 시작하므로 +1
-          break;
-        }
-      }
-    }
-    
-    // c. 상황에 맞춰 데이터 기입
-    if (targetRow !== -1) {
-      // ① 뚫려있는 빈 칸이 있으면 그 줄에 바로 덮어쓰기 (양식 테두리 유지)
-      sheet.getRange(targetRow, 1, 1, 6).setValues([rowData]);
-      sheet.getRange(targetRow, 5).setNumberFormat("₩#,##0");
-      
-    } else if (totalRow !== -1) {
-      // ② 미리 만들어둔 빈 칸이 꽉 찼으면, '합계' 바로 위에 새 줄을 삽입 후 데이터 기입
-      sheet.insertRowBefore(totalRow);
-      sheet.getRange(totalRow, 1, 1, 6).setValues([rowData]);
-      sheet.getRange(totalRow, 5).setNumberFormat("₩#,##0");
-      
-    } else {
-      // ③ 만약 '합계'가 아예 없는 시트라면 무조건 맨 아랫줄에 추가
-      sheet.appendRow(rowData);
-      sheet.getRange(sheet.getLastRow(), 5).setNumberFormat("₩#,##0");
-    }
-    
-    return ContentService.createTextOutput("OK");
-  } catch(err) {
-    return ContentService.createTextOutput("ERROR: " + err.toString());
+
+    writeExpenseRow(sheet, data, imageUrl);
+    return jsonResponse({ result: 'success' });
+  } catch (err) {
+    return jsonResponse({ result: 'error', message: err.message });
   }
-}`;
-            const textArea = document.createElement("textarea");
-            textArea.value = scriptCode;
-            document.body.appendChild(textArea);
-            textArea.select();
-            try {
-                document.execCommand('copy');
-                showToast("업그레이드된 마스터 스크립트가 복사되었습니다!");
-            } catch (err) {
-                alert("복사 실패. 수동으로 복사해주세요.");
-            }
-            document.body.removeChild(textArea);
-        }
-    </script>
+}
+
+// 날짜 기준 "26.9월" 형태의 월별 탭을 찾거나, 없으면 양식 탭을 복제해 생성
+function getOrCreateMonthSheet(ss, dateStr) {
+  var d = new Date(dateStr);
+  var tabName = (d.getFullYear() % 100) + '.' + (d.getMonth() + 1) + '월';
+  var sheet = ss.getSheetByName(tabName);
+  if (!sheet) {
+    var template = ss.getSheetByName(TEMPLATE_SHEET_NAME);
+    if (!template) throw new Error('양식 탭(' + TEMPLATE_SHEET_NAME + ')을 찾을 수 없습니다.');
+    sheet = template.copyTo(ss);
+    sheet.setName(tabName);
+    ss.setActiveSheet(sheet);
+    ss.moveActiveSheet(ss.getSheets().length);
+  }
+  return sheet;
+}
+
+// 시트에 row번째 행이 아직 없으면 자동으로 행을 늘려줍니다 (범위 초과 오류 방지)
+function ensureRowExists(sheet, row) {
+  var maxRows = sheet.getMaxRows();
+  if (row > maxRows) {
+    sheet.insertRowsAfter(maxRows, row - maxRows);
+  }
+}
+
+// A열(날짜) 기준 START_ROW부터 아래로 내려가며 비어있는 첫 행을 찾아
+// 날짜|사용처|사용내역|금액|사진 순서로 기입합니다. 칸이 차있으면 계속 다음 행으로 넘어갑니다.
+function writeExpenseRow(sheet, data, imageUrl) {
+  var row = START_ROW;
+  while (true) {
+    ensureRowExists(sheet, row);
+    var cell = sheet.getRange(row, 1).getValue();
+    if (cell === '' || cell === null) break;
+    row++;
+  }
+
+  // 열 순서: A=날짜 | B=사용처 | C=사용내역 | D=금액 | E=사진
+  sheet.getRange(row, 1).setValue(data.date);
+  sheet.getRange(row, 2).setValue(data.shopName);
+  sheet.getRange(row, 3).setValue(data.items);
+  sheet.getRange(row, 4).setValue(data.amount);
+  if (imageUrl) sheet.getRange(row, 5).setFormula('=IMAGE("' + imageUrl + '")');
+}
+
+// base64 영수증 이미지를 구글 드라이브에 업로드하고 썸네일 URL 반환
+function uploadImageToDrive(base64, mimeType, shopName, dateStr) {
+  var folder = getOrCreateFolder(DRIVE_FOLDER_NAME);
+  var ext = (mimeType && mimeType.indexOf('png') !== -1) ? 'png' : 'jpg';
+  var fileName = dateStr + '_' + (shopName || '영수증') + '.' + ext;
+  var bytes = Utilities.base64Decode(base64);
+  var blob = Utilities.newBlob(bytes, mimeType || 'image/jpeg', fileName);
+  var file = folder.createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return 'https://drive.google.com/thumbnail?id=' + file.getId();
+}
+
+function getOrCreateFolder(name) {
+  var folders = DriveApp.getFoldersByName(name);
+  if (folders.hasNext()) return folders.next();
+  return DriveApp.createFolder(name);
+}
+
+function jsonResponse(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+`;
+
+function copyAppsScriptCode() {
+  navigator.clipboard.writeText(APPS_SCRIPT_CODE)
+    .then(() => showToast('Apps Script 코드가 복사됐어요', 'success'))
+    .catch(() => showToast('복사에 실패했어요. 브라우저 권한을 확인해주세요', 'error'));
+}
+
+/* =========================================================================
+   TOAST
+   ========================================================================= */
+let toastTimer = null;
+function showToast(message, type = 'info') {
+  const el = document.getElementById('toast');
+  const colors = { success: 'bg-gray-900', error: 'bg-red-600', info: 'bg-gray-900' };
+  el.className = `toast fixed z-50 bottom-24 left-1/2 -translate-x-1/2 text-white text-[13px] font-medium rounded-full px-4 py-2.5 shadow-lg whitespace-nowrap ${colors[type] || colors.info}`;
+  el.textContent = message;
+  el.classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add('hidden'), 2400);
+}
+
+/* =========================================================================
+   EVENT BINDINGS
+   ========================================================================= */
+function bindEvents() {
+  document.getElementById('btn-fab').addEventListener('click', () => openForm());
+  document.getElementById('btn-back').addEventListener('click', () => showView('dashboard'));
+  document.getElementById('btn-submit').addEventListener('click', submitExpense);
+  document.getElementById('btn-delete').addEventListener('click', deleteExpense);
+
+  document.getElementById('input-camera').addEventListener('change', e => handleFileSelect(e.target.files[0]));
+  document.getElementById('input-gallery').addEventListener('change', e => handleFileSelect(e.target.files[0]));
+  document.getElementById('input-reshoot').addEventListener('change', e => handleFileSelect(e.target.files[0]));
+  document.getElementById('btn-reshoot').addEventListener('click', () => document.getElementById('input-reshoot').click());
+
+  document.getElementById('btn-settings').addEventListener('click', checkAdminAccessAndOpen);
+  document.getElementById('btn-close-settings').addEventListener('click', closeSettings);
+  document.getElementById('settings-backdrop-close').addEventListener('click', closeSettings);
+  document.getElementById('btn-save-settings').addEventListener('click', saveSettingsForm);
+  document.getElementById('btn-copy-script').addEventListener('click', copyAppsScriptCode);
+  document.getElementById('btn-export-settings').addEventListener('click', exportSettingsCode);
+}
+
+init();
+</script>
 </body>
 </html>
