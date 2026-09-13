@@ -69,6 +69,23 @@
     </div>
   </header>
 
+  <!-- ===================== 팀 접속 코드 잠금 화면 ===================== -->
+  <div id="lock-screen" class="hidden fixed inset-0 z-40 bg-white flex flex-col items-center justify-center px-6 text-center">
+    <button id="btn-lock-cancel" class="absolute top-5 right-5 w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
+      <i class="ph ph-x text-lg text-gray-500"></i>
+    </button>
+    <div class="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center mb-4">
+      <i class="ph-fill ph-lock-key text-3xl text-blue-600"></i>
+    </div>
+    <p class="text-sm text-gray-400 mb-1">접속 코드가 필요해요</p>
+    <div class="relative mb-5">
+      <select id="lock-team-select" class="appearance-none bg-gray-100 text-base font-bold text-gray-900 rounded-full pl-4 pr-9 py-2 cursor-pointer"></select>
+      <i class="ph ph-caret-down text-xs text-gray-500 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+    </div>
+    <input id="lock-code-input" type="text" inputmode="numeric" placeholder="코드 입력" class="w-full max-w-xs bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 text-center text-lg tracking-widest mb-3 transition-colors">
+    <button id="btn-lock-submit" class="w-full max-w-xs bg-blue-600 hover:bg-blue-700 transition text-white font-bold rounded-xl py-3.5">확인</button>
+  </div>
+
   <!-- ===================== VIEW 1: DASHBOARD ===================== -->
   <main id="view-dashboard" class="view px-4 pt-5 pb-28">
 
@@ -124,13 +141,13 @@
       <h2 id="form-title" class="text-base font-bold text-gray-900">영수증 등록</h2>
     </div>
 
-    <!-- image capture -->
+    <!-- image capture (최대 3장) -->
     <div id="image-drop" class="rounded-2xl border-2 border-dashed border-gray-200 bg-white overflow-hidden">
       <div id="image-empty-state" class="flex flex-col items-center justify-center py-8 px-4">
         <div class="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center mb-3">
           <i class="ph ph-camera text-2xl text-blue-600"></i>
         </div>
-        <p class="text-sm text-gray-500 mb-4 text-center">영수증 사진을 촬영하거나<br/>앨범에서 선택하면 자동으로 입력돼요</p>
+        <p class="text-sm text-gray-500 mb-4 text-center">영수증 사진을 촬영하거나<br/>앨범에서 선택하면 자동으로 입력돼요 (최대 3장)</p>
         <div class="flex gap-2 w-full max-w-xs">
           <label class="flex-1 cursor-pointer text-center text-sm font-semibold bg-blue-600 hover:bg-blue-700 transition text-white rounded-xl py-2.5">
             <i class="ph ph-camera mr-1"></i> 카메라 촬영
@@ -138,29 +155,36 @@
           </label>
           <label class="flex-1 cursor-pointer text-center text-sm font-semibold bg-gray-100 hover:bg-gray-200 transition text-gray-700 rounded-xl py-2.5">
             <i class="ph ph-image mr-1"></i> 앨범 선택
-            <input id="input-gallery" type="file" accept="image/*" class="hidden">
+            <input id="input-gallery" type="file" accept="image/*" multiple class="hidden">
           </label>
         </div>
       </div>
-      <div id="image-preview-state" class="hidden relative">
-        <img id="image-preview" class="w-full h-48 object-cover" src="">
-        <button id="btn-reshoot" class="absolute top-2 right-2 bg-black/55 backdrop-blur text-white text-xs font-medium rounded-full px-3 py-1.5 flex items-center gap-1">
-          <i class="ph ph-arrow-clockwise"></i> 다시 촬영
-        </button>
+      <div id="image-grid-state" class="hidden p-3">
+        <div id="image-grid" class="grid grid-cols-3 gap-2"></div>
+        <p class="text-[11px] text-gray-400 text-center mt-2">영수증이 길면 나눠서 최대 3장까지 첨부할 수 있어요</p>
       </div>
-      <input id="input-reshoot" type="file" accept="image/*" class="hidden">
     </div>
 
     <!-- fields -->
     <div class="mt-5 flex flex-col gap-4">
       <div>
         <label class="text-xs font-semibold text-gray-500 mb-1.5 block">결제일자</label>
-        <input id="field-date" type="date" class="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-3 text-sm font-medium text-gray-800">
+        <input id="field-date" type="date" class="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-3 text-sm font-medium text-gray-800 transition-colors">
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-gray-500 mb-1.5 block">업로드할 시트 탭</label>
+        <div class="flex gap-2">
+          <select id="field-tab" class="flex-1 bg-white border border-gray-200 rounded-xl px-3.5 py-3 text-sm font-medium text-gray-800"></select>
+          <button type="button" id="btn-add-tab" class="w-12 shrink-0 rounded-xl bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center">
+            <i class="ph ph-plus text-lg text-gray-600"></i>
+          </button>
+        </div>
+        <p class="text-[11px] text-gray-400 mt-1.5">보통은 "자동"으로 두세요. 원정 경기 등 별도 탭이 필요할 때만 "+"로 새 탭을 추가해 선택하세요.</p>
       </div>
       <div>
         <label class="text-xs font-semibold text-gray-500 mb-1.5 block">결제금액</label>
         <div class="relative">
-          <input id="field-amount" type="number" inputmode="numeric" placeholder="0" class="w-full bg-white border border-gray-200 rounded-xl pl-3.5 pr-10 py-3 text-sm font-medium text-gray-800">
+          <input id="field-amount" type="number" inputmode="numeric" placeholder="0" class="w-full bg-white border border-gray-200 rounded-xl pl-3.5 pr-10 py-3 text-sm font-medium text-gray-800 transition-colors">
           <span class="absolute right-3.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">원</span>
         </div>
       </div>
@@ -170,12 +194,13 @@
       </div>
       <div>
         <label class="text-xs font-semibold text-gray-500 mb-1.5 block">사용처</label>
-        <input id="field-shop" type="text" placeholder="예: 댓잎갈비" class="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-3 text-sm font-medium text-gray-800">
+        <input id="field-shop" type="text" placeholder="예: 댓잎갈비" class="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-3 text-sm font-medium text-gray-800 transition-colors">
       </div>
       <div>
         <label class="text-xs font-semibold text-gray-500 mb-1.5 block">사용내역</label>
         <textarea id="field-items" rows="2" placeholder="예: 코칭스태프 중식 5인" class="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-3 text-sm font-medium text-gray-800 resize-none"></textarea>
       </div>
+      <p id="confidence-warning" class="hidden text-xs text-amber-600 bg-amber-50 rounded-xl px-3.5 py-2.5 flex items-center gap-1.5"><i class="ph-fill ph-warning-circle"></i><span></span></p>
     </div>
 
     <div class="mt-6 flex gap-2">
@@ -220,8 +245,9 @@
         </div>
 
         <div>
-          <label class="text-xs font-semibold text-gray-500 mb-2 block">팀별 구글 시트 ID</label>
-          <div id="settings-sheet-ids" class="flex flex-col gap-2.5"></div>
+          <label class="text-xs font-semibold text-gray-500 mb-2 block">팀별 구글 시트 ID / 접속 코드</label>
+          <div id="settings-sheet-ids" class="flex flex-col gap-3"></div>
+          <p class="text-[11px] text-gray-400 mt-1.5">접속 코드를 입력해두면, 그 코드를 아는 사람만 해당 팀 대시보드/업로드에 접근할 수 있어요. 비워두면 누구나 접근 가능합니다.</p>
         </div>
 
         <button id="btn-copy-script" class="w-full flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 transition text-white text-sm font-semibold rounded-xl py-3">
@@ -272,11 +298,14 @@ const BAKED_SETTINGS = {
   geminiApiKey: '',
   webhookUrl: '',
   sheetIds: { 'U18': '', 'U15': '', 'U12': '', 'U18 치료실': '', 'U15 치료실': '' },
+  teamCodes: { 'U18': '', 'U15': '', 'U12': '', 'U18 치료실': '', 'U15 치료실': '' }, // 팀별 접속 코드(선택). 비워두면 제한 없음.
   adminPin: ''
 };
 const LS_SETTINGS = 'tbs_settings';
 const LS_EXPENSES = 'tbs_expenses';
 const LS_TEAM = 'tbs_current_team';
+const LS_TAB_HISTORY_PREFIX = 'tbs_tab_history_'; // 팀별 최근 사용한 시트 탭 이름 기록
+const LS_UNLOCKED_TEAMS = 'tbs_unlocked_teams'; // 이 기기에서 접속 코드를 확인한 팀 목록
 const SS_ADMIN_UNLOCKED = 'tbs_admin_unlocked'; // 세션 동안만 유지 (sessionStorage)
 
 /* =========================================================================
@@ -285,7 +314,7 @@ const SS_ADMIN_UNLOCKED = 'tbs_admin_unlocked'; // 세션 동안만 유지 (sess
 let settings = loadSettings();
 let expenses = loadExpenses();
 let currentTeam = localStorage.getItem(LS_TEAM) || TEAMS[0];
-let currentImage = null;      // { base64, mimeType, dataUrl }
+let currentImages = [];       // [{ base64, mimeType, dataUrl }, ...] 최대 3장
 let editingId = null;
 let chartInstance = null;
 
@@ -296,7 +325,13 @@ function loadSettings() {
   try {
     const raw = JSON.parse(localStorage.getItem(LS_SETTINGS));
     if (!raw) return JSON.parse(JSON.stringify(BAKED_SETTINGS));
-    return { ...BAKED_SETTINGS, ...raw, sheetIds: { ...BAKED_SETTINGS.sheetIds, ...(raw.sheetIds || {}) } };
+    // 한때 시트를 자유롭게 추가하는 teams 배열 형태로 저장된 적이 있다면 다시 sheetIds 형태로 변환
+    let sheetIds = raw.sheetIds;
+    if (!sheetIds && Array.isArray(raw.teams)) {
+      sheetIds = {};
+      raw.teams.forEach(t => { if (t && t.name) sheetIds[t.name] = t.sheetId || ''; });
+    }
+    return { ...BAKED_SETTINGS, ...raw, sheetIds: { ...BAKED_SETTINGS.sheetIds, ...(sheetIds || {}) }, teamCodes: { ...BAKED_SETTINGS.teamCodes, ...(raw.teamCodes || {}) } };
   } catch { return JSON.parse(JSON.stringify(BAKED_SETTINGS)); }
 }
 function saveSettings() { localStorage.setItem(LS_SETTINGS, JSON.stringify(settings)); }
@@ -311,13 +346,20 @@ function saveExpenses() { localStorage.setItem(LS_EXPENSES, JSON.stringify(expen
    INIT
    ========================================================================= */
 function init() {
-  // team select
-  const teamSel = document.getElementById('team-select');
-  teamSel.innerHTML = TEAMS.map(t => `<option value="${t}" ${t === currentTeam ? 'selected' : ''}>${t}</option>`).join('');
-  teamSel.addEventListener('change', e => {
-    currentTeam = e.target.value;
-    localStorage.setItem(LS_TEAM, currentTeam);
-    renderDashboard();
+  refreshTeamSelect();
+  document.getElementById('team-select').addEventListener('change', e => selectTeam(e.target.value));
+
+  // 잠금 화면
+  document.getElementById('lock-team-select').addEventListener('change', e => {
+    const t = e.target.value;
+    if (isTeamUnlocked(t)) selectTeam(t);
+    else showLockScreen(t);
+  });
+  document.getElementById('btn-lock-submit').addEventListener('click', submitLockCode);
+  document.getElementById('lock-code-input').addEventListener('keydown', e => { if (e.key === 'Enter') submitLockCode(); });
+  document.getElementById('btn-lock-cancel').addEventListener('click', () => {
+    hideLockScreen();
+    refreshTeamSelect(); // 헤더 드롭다운을 실제 currentTeam으로 되돌림
   });
 
   // category select
@@ -325,7 +367,69 @@ function init() {
   catSel.innerHTML = CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('');
 
   bindEvents();
-  renderDashboard();
+  selectTeam(currentTeam); // 잠금 여부를 확인한 뒤 대시보드를 그리거나 잠금 화면을 띄움
+}
+
+function refreshTeamSelect() {
+  const teamSel = document.getElementById('team-select');
+  teamSel.innerHTML = TEAMS.map(t => `<option value="${t}" ${t === currentTeam ? 'selected' : ''}>${t}</option>`).join('');
+}
+
+/* =========================================================================
+   팀별 접속 코드 (소프트 잠금 — 실수로 다른 팀에 업로드/열람하는 것을 방지)
+   ========================================================================= */
+function getTeamCode(teamName) { return (settings.teamCodes && settings.teamCodes[teamName]) || ''; }
+function loadUnlockedTeams() {
+  try { return JSON.parse(localStorage.getItem(LS_UNLOCKED_TEAMS)) || []; } catch { return []; }
+}
+function isTeamUnlocked(teamName) {
+  const code = getTeamCode(teamName);
+  if (!code) return true; // 코드가 설정되어 있지 않으면 제한 없음
+  return loadUnlockedTeams().includes(teamName);
+}
+function markTeamUnlocked(teamName) {
+  const list = loadUnlockedTeams();
+  if (!list.includes(teamName)) {
+    list.push(teamName);
+    localStorage.setItem(LS_UNLOCKED_TEAMS, JSON.stringify(list));
+  }
+}
+
+// 팀을 선택 시도합니다. 잠겨있으면 대시보드 대신 잠금 화면을 보여줍니다.
+function selectTeam(teamName) {
+  if (isTeamUnlocked(teamName)) {
+    currentTeam = teamName;
+    localStorage.setItem(LS_TEAM, currentTeam);
+    refreshTeamSelect();
+    hideLockScreen();
+    renderDashboard();
+  } else {
+    showLockScreen(teamName);
+  }
+}
+
+function showLockScreen(teamName) {
+  const sel = document.getElementById('lock-team-select');
+  sel.innerHTML = TEAMS.map(t => `<option value="${t}" ${t === teamName ? 'selected' : ''}>${t}</option>`).join('');
+  document.getElementById('lock-code-input').value = '';
+  document.getElementById('lock-code-input').classList.remove('border-red-400', 'ring-2', 'ring-red-100');
+  document.getElementById('lock-screen').classList.remove('hidden');
+  setTimeout(() => document.getElementById('lock-code-input').focus(), 50);
+}
+function hideLockScreen() {
+  document.getElementById('lock-screen').classList.add('hidden');
+}
+function submitLockCode() {
+  const teamName = document.getElementById('lock-team-select').value;
+  const input = document.getElementById('lock-code-input').value.trim();
+  const code = getTeamCode(teamName);
+  if (!code || input === code) {
+    if (code) markTeamUnlocked(teamName);
+    selectTeam(teamName);
+  } else {
+    showToast('접속 코드가 올바르지 않아요', 'error');
+    document.getElementById('lock-code-input').classList.add('border-red-400', 'ring-2', 'ring-red-100');
+  }
 }
 
 /* =========================================================================
@@ -339,7 +443,14 @@ function showView(name) {
 
 function openForm(expense = null) {
   editingId = expense ? expense.id : null;
-  currentImage = expense && expense.imageBase64 ? { base64: expense.imageBase64, mimeType: expense.imageType, dataUrl: `data:${expense.imageType};base64,${expense.imageBase64}` } : null;
+  // 이전 형식(단일 imageBase64)과 새 형식(images 배열) 모두 지원
+  if (expense && Array.isArray(expense.images) && expense.images.length) {
+    currentImages = expense.images.map(img => ({ base64: img.base64, mimeType: img.mimeType, dataUrl: `data:${img.mimeType};base64,${img.base64}` }));
+  } else if (expense && expense.imageBase64) {
+    currentImages = [{ base64: expense.imageBase64, mimeType: expense.imageType, dataUrl: `data:${expense.imageType};base64,${expense.imageBase64}` }];
+  } else {
+    currentImages = [];
+  }
 
   document.getElementById('form-title').textContent = expense ? '영수증 수정' : '영수증 등록';
   document.getElementById('btn-delete').classList.toggle('hidden', !expense);
@@ -348,6 +459,8 @@ function openForm(expense = null) {
   document.getElementById('field-category').value = expense ? expense.category : CATEGORIES[0];
   document.getElementById('field-shop').value = expense ? expense.shopName : '';
   document.getElementById('field-items').value = expense ? expense.items : '';
+  populateTabSelect(expense ? (expense.tabName || '') : '');
+  clearConfidenceHighlights();
 
   renderImageState();
   showView('form');
@@ -355,15 +468,88 @@ function openForm(expense = null) {
 
 function renderImageState() {
   const empty = document.getElementById('image-empty-state');
-  const preview = document.getElementById('image-preview-state');
-  if (currentImage) {
-    empty.classList.add('hidden');
-    preview.classList.remove('hidden');
-    document.getElementById('image-preview').src = currentImage.dataUrl;
-  } else {
+  const gridState = document.getElementById('image-grid-state');
+  const grid = document.getElementById('image-grid');
+
+  if (currentImages.length === 0) {
     empty.classList.remove('hidden');
-    preview.classList.add('hidden');
+    gridState.classList.add('hidden');
+    grid.innerHTML = '';
+    return;
   }
+  empty.classList.add('hidden');
+  gridState.classList.remove('hidden');
+
+  let html = currentImages.map((img, idx) => `
+    <div class="relative aspect-square rounded-xl overflow-hidden bg-gray-100">
+      <img src="${img.dataUrl}" class="w-full h-full object-cover">
+      <button type="button" data-idx="${idx}" class="remove-image-btn absolute top-1 right-1 bg-black/60 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] leading-none">
+        <i class="ph ph-x"></i>
+      </button>
+    </div>`).join('');
+
+  if (currentImages.length < 3) {
+    html += `
+      <div class="aspect-square rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center gap-3">
+        <button type="button" id="btn-add-camera" class="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center"><i class="ph ph-camera text-base"></i></button>
+        <button type="button" id="btn-add-gallery" class="w-8 h-8 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center"><i class="ph ph-image text-base"></i></button>
+      </div>`;
+  }
+  grid.innerHTML = html;
+
+  grid.querySelectorAll('.remove-image-btn').forEach(btn => {
+    btn.addEventListener('click', () => removeImage(Number(btn.dataset.idx)));
+  });
+  const addCam = document.getElementById('btn-add-camera');
+  const addGal = document.getElementById('btn-add-gallery');
+  if (addCam) addCam.addEventListener('click', () => document.getElementById('input-camera').click());
+  if (addGal) addGal.addEventListener('click', () => document.getElementById('input-gallery').click());
+}
+
+function removeImage(idx) {
+  currentImages.splice(idx, 1);
+  renderImageState();
+  if (currentImages.length > 0) {
+    scanReceipt(currentImages.map(i => ({ base64: i.base64, mimeType: i.mimeType })));
+  }
+}
+
+/* =========================================================================
+   시트 탭 선택/추가 (예: 자동 "26.9월" 외에 "26.9월(천안)" 같은 별도 탭)
+   ========================================================================= */
+function loadTabHistory(team) {
+  try { return JSON.parse(localStorage.getItem(LS_TAB_HISTORY_PREFIX + team)) || []; }
+  catch { return []; }
+}
+function saveTabHistory(team, list) {
+  localStorage.setItem(LS_TAB_HISTORY_PREFIX + team, JSON.stringify(list));
+}
+function addTabHistory(team, tabName) {
+  const list = loadTabHistory(team);
+  if (!list.includes(tabName)) {
+    list.push(tabName);
+    saveTabHistory(team, list);
+  }
+}
+
+// selectedTabName이 있으면 그 값을 선택한 채로, 없으면 "자동"을 기본값으로 드롭다운을 채웁니다.
+function populateTabSelect(selectedTabName) {
+  const sel = document.getElementById('field-tab');
+  const history = loadTabHistory(currentTeam);
+  // 수정 중인 영수증의 탭 이름이 이 기기의 기록에 없다면(다른 기기에서 추가된 경우 등) 임시로 포함
+  if (selectedTabName && !history.includes(selectedTabName)) history.push(selectedTabName);
+  const options = ['<option value="">자동 (날짜 기준 월별 탭)</option>']
+    .concat(history.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`));
+  sel.innerHTML = options.join('');
+  sel.value = selectedTabName || '';
+}
+
+function addCustomTab() {
+  const name = prompt('추가할 시트 탭 이름을 입력하세요\n예: 26.9월(천안)');
+  if (!name || !name.trim()) return;
+  const trimmed = name.trim();
+  addTabHistory(currentTeam, trimmed);
+  populateTabSelect(trimmed);
 }
 
 /* =========================================================================
@@ -461,7 +647,7 @@ function renderRecentList(teamExpenses) {
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-1.5">
           <p class="text-sm font-semibold text-gray-900 truncate">${escapeHtml(e.shopName || '상호명 없음')}</p>
-          ${e.imageBase64 ? '<i class="ph-fill ph-image text-[11px] text-gray-300"></i>' : ''}
+          ${(e.images && e.images.length) || e.imageBase64 ? '<i class="ph-fill ph-image text-[11px] text-gray-300"></i>' : ''}
         </div>
         <p class="text-xs text-gray-400 mt-0.5">${dateLabel} · ${e.category}</p>
       </div>
@@ -484,22 +670,34 @@ function escapeHtml(str) {
 }
 
 /* =========================================================================
-   IMAGE HANDLING + COMPRESSION
+   IMAGE HANDLING + COMPRESSION + 자동 보정
    ========================================================================= */
-async function handleFileSelect(file) {
-  if (!file) return;
-  try {
-    const source = await loadImageSource(file);
-    compressAndScan(source);
-  } catch (err) {
-    console.error(err);
-    // HEIC 등 브라우저가 디코딩하지 못하는 형식일 때 안내
-    const isLikelyHeic = /heic|heif/i.test(file.type) || /\.heic$|\.heif$/i.test(file.name || '');
-    if (isLikelyHeic) {
-      showToast('이 사진 형식(HEIC)은 지원되지 않아요. 아이폰 카메라 설정을 "높은 호환성"으로 바꾸거나 다른 사진을 선택해주세요', 'error');
-    } else {
-      showToast('이미지를 불러오지 못했어요. 다른 사진으로 다시 시도해주세요', 'error');
+async function handleFilesSelected(fileList) {
+  const files = Array.from(fileList || []).filter(Boolean);
+  if (files.length === 0) return;
+
+  const remaining = 3 - currentImages.length;
+  if (remaining <= 0) { showToast('사진은 최대 3장까지 첨부할 수 있어요', 'error'); return; }
+
+  const toProcess = files.slice(0, remaining);
+  if (files.length > toProcess.length) showToast('최대 3장까지만 추가됐어요', 'info');
+
+  for (const file of toProcess) {
+    try {
+      const source = await loadImageSource(file);
+      currentImages.push(compressImage(source));
+    } catch (err) {
+      console.error(err);
+      const isLikelyHeic = /heic|heif/i.test(file.type) || /\.heic$|\.heif$/i.test(file.name || '');
+      showToast(isLikelyHeic
+        ? '이 사진 형식(HEIC)은 지원되지 않아요. 아이폰 카메라 설정을 "높은 호환성"으로 바꾸거나 다른 사진을 선택해주세요'
+        : '이미지를 불러오지 못했어요. 다른 사진으로 다시 시도해주세요', 'error');
     }
+  }
+
+  renderImageState();
+  if (currentImages.length > 0) {
+    scanReceipt(currentImages.map(i => ({ base64: i.base64, mimeType: i.mimeType })));
   }
 }
 
@@ -526,7 +724,7 @@ async function loadImageSource(file) {
   });
 }
 
-function compressAndScan(source) {
+function compressImage(source) {
   const MAX = 1600; // 글자 인식 정확도를 위해 기존보다 여유있게 확보
   let width = source.width, height = source.height;
   if (width > MAX || height > MAX) {
@@ -536,31 +734,57 @@ function compressAndScan(source) {
   }
   const canvas = document.createElement('canvas');
   canvas.width = width; canvas.height = height;
-  canvas.getContext('2d').drawImage(source, 0, 0, width, height);
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(source, 0, 0, width, height);
+  autoEnhance(ctx, width, height);
+
   const outType = 'image/jpeg';
-  const compressedDataUrl = canvas.toDataURL(outType, 0.92);
-  const base64 = compressedDataUrl.split(',')[1];
+  const dataUrl = canvas.toDataURL(outType, 0.92);
+  const base64 = dataUrl.split(',')[1];
 
   if (source.close) source.close(); // ImageBitmap 메모리 해제
-
-  currentImage = { base64, mimeType: outType, dataUrl: compressedDataUrl };
-  renderImageState();
-  scanReceipt(base64, outType);
+  return { base64, mimeType: outType, dataUrl };
 }
+
+// 자동 명암 보정: 어둡거나 흐릿하게 찍힌 영수증의 밝기 대비를 넓혀 글자를 더 또렷하게 만듭니다.
+// (히스토그램 스트레칭 — 별도 라이브러리 없이 캔버스만으로 처리)
+function autoEnhance(ctx, width, height) {
+  try {
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+    let min = 255, max = 0;
+    for (let i = 0; i < data.length; i += 16) { // 성능을 위해 일부 픽셀만 샘플링
+      const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      if (lum < min) min = lum;
+      if (lum > max) max = lum;
+    }
+    const range = max - min;
+    if (range < 20) return; // 이미 대비가 충분하면 그대로 둠
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = clamp255(((data[i] - min) / range) * 255);
+      data[i + 1] = clamp255(((data[i + 1] - min) / range) * 255);
+      data[i + 2] = clamp255(((data[i + 2] - min) / range) * 255);
+    }
+    ctx.putImageData(imageData, 0, 0);
+  } catch (e) {
+    console.warn('자동 보정을 건너뜁니다', e); // 실패해도 원본 화질로 스캔은 계속 진행
+  }
+}
+function clamp255(v) { return Math.max(0, Math.min(255, v)); }
 
 /* =========================================================================
    GEMINI API SCAN
    ========================================================================= */
-async function scanReceipt(base64, mimeType) {
+async function scanReceipt(images) {
   document.getElementById('scan-overlay').classList.remove('hidden');
   try {
     let data;
     if (settings.geminiApiKey) {
       try {
-        data = await callGeminiApi(base64, mimeType);
+        data = await callGeminiApi(images, 'gemini-flash-latest');
       } catch (firstErr) {
-        console.warn('1차 스캔 실패, 재시도합니다', firstErr);
-        data = await callGeminiApi(base64, mimeType); // 네트워크/일시 오류 대비 1회 재시도
+        console.warn('1차 스캔 실패, 더 정밀한 모델로 재시도합니다', firstErr);
+        data = await callGeminiApi(images, 'gemini-pro-latest'); // 실패 시 더 강력한 모델로 1회 재시도
       }
     } else {
       data = await simulateScan();
@@ -575,29 +799,31 @@ async function scanReceipt(base64, mimeType) {
   }
 }
 
-async function callGeminiApi(base64, mimeType) {
-  const prompt = `너는 한국 영수증 전문 OCR 어시스턴트야. 아래 영수증 이미지를 최대한 정확히 읽어서 반드시 아래 JSON 형식으로만 응답해. 코드블록(\`\`\`)이나 설명 문장은 절대 포함하지 마.
+async function callGeminiApi(images, modelId) {
+  const prompt = `너는 한국 영수증 전문 OCR 어시스턴트야. 아래 영수증 이미지(1~3장, 같은 영수증의 여러 부분/사본일 수 있음)를 최대한 정확히 읽어서 반드시 아래 JSON 형식으로만 응답해. 코드블록(\`\`\`)이나 설명 문장은 절대 포함하지 마.
 {
   "date": "YYYY-MM-DD",
   "amount": 숫자(콤마/원 기호 없이 정수),
   "shopName": "상호명",
   "items": "주문 품목 및 비고",
-  "category": "식사비 | 간식비 | 연습경기 간식비 | 리그경기 간식비 | 의료/비품비 | 기타 중 하나"
+  "category": "식사비 | 간식비 | 연습경기 간식비 | 리그경기 간식비 | 의료/비품비 | 기타 중 하나",
+  "confidence": { "date": "high 또는 low", "amount": "high 또는 low", "shopName": "high 또는 low" }
 }
 규칙:
 - amount는 영수증의 "합계/총액/받을금액" 중 최종 결제 금액을 사용해.
 - 날짜를 찾을 수 없으면 오늘 날짜(${new Date().toISOString().slice(0,10)})를 사용해.
 - category는 반드시 제시된 6개 값 중 하나여야 해.
-- 이미지가 흐리거나 일부만 보여도, 보이는 글자를 최대한 근거로 최선의 추정값을 채워줘.`;
+- 이미지가 흐리거나 일부만 보여도, 보이는 글자를 최대한 근거로 최선의 추정값을 채워줘.
+- 여러 장이 주어지면 서로 보완해서 읽고, 그래도 자신 없는 값은 confidence를 "low"로 표시해.`;
 
-  // gemini-flash-latest는 Google이 관리하는 별칭으로, 특정 모델 버전이 만료/교체되어도
-  // 항상 현재 사용 가능한 최신 flash 모델을 자동으로 가리켜 스캔 실패를 줄여줍니다.
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${settings.geminiApiKey}`;
+  const imageParts = images.map(img => ({ inline_data: { mime_type: img.mimeType, data: img.base64 } }));
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${settings.geminiApiKey}`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: base64 } }] }],
+      contents: [{ parts: [{ text: prompt }, ...imageParts] }],
       generationConfig: { response_mime_type: 'application/json', temperature: 0.1 }
     })
   });
@@ -614,21 +840,52 @@ async function callGeminiApi(base64, mimeType) {
 
 function simulateScan() {
   const samples = [
-    { date: new Date().toISOString().slice(0, 10), amount: 97000, shopName: '댓잎갈비', items: '코칭스태프 중식 5인', category: '식사비' },
-    { date: new Date().toISOString().slice(0, 10), amount: 32000, shopName: 'GS25 훈련장점', items: '음료 및 간식', category: '간식비' },
-    { date: new Date().toISOString().slice(0, 10), amount: 15000, shopName: '연습구장 매점', items: '연습경기 간식', category: '연습경기 간식비' },
-    { date: new Date().toISOString().slice(0, 10), amount: 210000, shopName: '온누리약국', items: '테이핑 및 파스', category: '의료/비품비' }
+    { date: new Date().toISOString().slice(0, 10), amount: 97000, shopName: '댓잎갈비', items: '코칭스태프 중식 5인', category: '식사비', confidence: { date: 'high', amount: 'high', shopName: 'high' } },
+    { date: new Date().toISOString().slice(0, 10), amount: 32000, shopName: 'GS25 훈련장점', items: '음료 및 간식', category: '간식비', confidence: { date: 'high', amount: 'low', shopName: 'high' } },
+    { date: new Date().toISOString().slice(0, 10), amount: 15000, shopName: '연습구장 매점', items: '연습경기 간식', category: '연습경기 간식비', confidence: { date: 'high', amount: 'high', shopName: 'low' } },
+    { date: new Date().toISOString().slice(0, 10), amount: 210000, shopName: '온누리약국', items: '테이핑 및 파스', category: '의료/비품비', confidence: { date: 'high', amount: 'high', shopName: 'high' } }
   ];
   const pick = samples[Math.floor(Math.random() * samples.length)];
   return new Promise(resolve => setTimeout(() => resolve(pick), 1200));
 }
 
+// 신뢰도(confidence)가 낮은 항목은 노란색으로 강조해 사용자가 한 번 더 확인하도록 유도합니다.
+const CONFIDENCE_FIELD_MAP = { date: 'field-date', amount: 'field-amount', shopName: 'field-shop' };
 function fillFormFromScan(data) {
   if (data.date) document.getElementById('field-date').value = data.date;
   if (data.amount != null) document.getElementById('field-amount').value = data.amount;
   if (data.shopName) document.getElementById('field-shop').value = data.shopName;
   if (data.items) document.getElementById('field-items').value = data.items;
   if (data.category && CATEGORIES.includes(data.category)) document.getElementById('field-category').value = data.category;
+
+  clearConfidenceHighlights();
+  const lowFields = [];
+  const fieldLabels = { date: '결제일자', amount: '결제금액', shopName: '사용처' };
+  if (data.confidence) {
+    Object.entries(CONFIDENCE_FIELD_MAP).forEach(([key, elId]) => {
+      if (data.confidence[key] === 'low') {
+        highlightLowConfidence(elId);
+        lowFields.push(fieldLabels[key]);
+      }
+    });
+  }
+  const warningEl = document.getElementById('confidence-warning');
+  if (lowFields.length > 0) {
+    warningEl.querySelector('span').textContent = `${lowFields.join(', ')} 항목은 AI가 확신하지 못했어요. 다시 한 번 확인해주세요`;
+    warningEl.classList.remove('hidden');
+  } else {
+    warningEl.classList.add('hidden');
+  }
+}
+function highlightLowConfidence(elId) {
+  const el = document.getElementById(elId);
+  el.classList.add('border-amber-400', 'bg-amber-50', 'ring-2', 'ring-amber-200');
+}
+function clearConfidenceHighlights() {
+  ['field-date', 'field-amount', 'field-shop'].forEach(elId => {
+    document.getElementById(elId).classList.remove('border-amber-400', 'bg-amber-50', 'ring-2', 'ring-amber-200');
+  });
+  document.getElementById('confidence-warning').classList.add('hidden');
 }
 
 /* =========================================================================
@@ -649,8 +906,8 @@ async function submitExpense() {
     id: editingId || Date.now().toString(),
     team: currentTeam,
     date, amount, category, shopName, items,
-    imageBase64: currentImage ? currentImage.base64 : null,
-    imageType: currentImage ? currentImage.mimeType : null
+    tabName: document.getElementById('field-tab').value || null,
+    images: currentImages.map(img => ({ base64: img.base64, mimeType: img.mimeType }))
   };
 
   if (editingId) {
@@ -721,7 +978,10 @@ function openSettings() {
   wrap.innerHTML = TEAMS.map(t => `
     <div>
       <label class="text-[11px] text-gray-400 mb-1 block">${t}</label>
-      <input data-team="${t}" type="text" placeholder="스프레드시트 ID" value="${settings.sheetIds[t] || ''}" class="sheet-id-input w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm">
+      <div class="flex gap-2">
+        <input data-team="${t}" type="text" placeholder="스프레드시트 ID" value="${settings.sheetIds[t] || ''}" class="sheet-id-input flex-[1.6] bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm">
+        <input data-team="${t}" type="text" placeholder="접속 코드(선택)" value="${settings.teamCodes[t] || ''}" class="team-code-input flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm">
+      </div>
     </div>`).join('');
   document.getElementById('modal-settings').classList.remove('hidden');
 }
@@ -733,6 +993,9 @@ function saveSettingsForm() {
   settings.adminPin = document.getElementById('settings-admin-pin').value.trim();
   document.querySelectorAll('.sheet-id-input').forEach(input => {
     settings.sheetIds[input.dataset.team] = input.value.trim();
+  });
+  document.querySelectorAll('.team-code-input').forEach(input => {
+    settings.teamCodes[input.dataset.team] = input.value.trim();
   });
   saveSettings();
   closeSettings();
@@ -750,10 +1013,15 @@ function exportSettingsCode() {
   document.querySelectorAll('.sheet-id-input').forEach(input => {
     sheetIds[input.dataset.team] = input.value.trim();
   });
+  const teamCodes = {};
+  document.querySelectorAll('.team-code-input').forEach(input => {
+    teamCodes[input.dataset.team] = input.value.trim();
+  });
   const code = `const BAKED_SETTINGS = {
   geminiApiKey: ${JSON.stringify(geminiApiKey)},
   webhookUrl: ${JSON.stringify(webhookUrl)},
   sheetIds: ${JSON.stringify(sheetIds, null, 2).replace(/\n/g, '\n  ')},
+  teamCodes: ${JSON.stringify(teamCodes, null, 2).replace(/\n/g, '\n  ')},
   adminPin: ${JSON.stringify(adminPin)}
 };`;
   navigator.clipboard.writeText(code)
@@ -767,36 +1035,42 @@ const APPS_SCRIPT_CODE = `/**
  * [배포 > 새 배포 > 웹 앱]으로 배포하세요. (액세스 권한: 모든 사용자)
  * 배포된 웹 앱 URL을 앱 설정의 Webhook URL에 입력하면 연동이 완료됩니다.
  *
- * 기록 위치: A5(날짜) / B5(사용처) / C5(사용내역) / D5(금액) / E5(사진) 부터 시작해서,
- * 해당 칸이 이미 차 있으면 자동으로 한 칸씩 아래로 내려가며 계속 쌓입니다.
+ * 기록 위치: A5(날짜) / B5(사용처) / C5(사용내역) / D5(금액) / E5(사진1) / F5(사진2) / G5(사진3) 부터
+ * 시작해서, 해당 칸이 이미 차 있으면 자동으로 한 칸씩 아래로 내려가며 계속 쌓입니다.
+ *
+ * 탭(시트) 선택: 기본은 날짜 기준 "26.9월" 자동 탭이지만, 앱에서 사용자가 별도 탭 이름
+ * (예: "26.9월(천안)")을 지정하면 그 탭을 그대로 찾거나 새로 만들어 기록합니다.
  */
 
 var TEMPLATE_SHEET_NAME = '양식';               // 매월 시트 생성 시 복제할 기본 양식 탭 이름
 var DRIVE_FOLDER_NAME = '팀예산스캐너_영수증';   // 영수증 이미지가 저장될 구글 드라이브 폴더 이름
 var START_ROW = 5;                              // 데이터가 시작되는 첫 번째 행
+var PHOTO_START_COL = 5;                        // 사진 1장째가 들어갈 열 (5=E열). 2장째는 F열, 3장째는 G열.
 
 function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
     var ss = SpreadsheetApp.openById(data.sheetId);
-    var sheet = getOrCreateMonthSheet(ss, data.date);
+    var sheet = getOrCreateMonthSheet(ss, data.date, data.tabName);
 
-    var imageUrl = '';
-    if (data.imageBase64) {
-      imageUrl = uploadImageToDrive(data.imageBase64, data.imageType, data.shopName, data.date);
+    // images: [{base64, mimeType}, ...] 최대 3장. 구버전 클라이언트 호환을 위해 imageBase64도 지원.
+    var images = data.images && data.images.length ? data.images : (data.imageBase64 ? [{ base64: data.imageBase64, mimeType: data.imageType }] : []);
+    var imageUrls = [];
+    for (var i = 0; i < images.length && i < 3; i++) {
+      imageUrls.push(uploadImageToDrive(images[i].base64, images[i].mimeType, data.shopName, data.date, i));
     }
 
-    writeExpenseRow(sheet, data, imageUrl);
+    writeExpenseRow(sheet, data, imageUrls);
     return jsonResponse({ result: 'success' });
   } catch (err) {
     return jsonResponse({ result: 'error', message: err.message });
   }
 }
 
-// 날짜 기준 "26.9월" 형태의 월별 탭을 찾거나, 없으면 양식 탭을 복제해 생성
-function getOrCreateMonthSheet(ss, dateStr) {
-  var d = new Date(dateStr);
-  var tabName = (d.getFullYear() % 100) + '.' + (d.getMonth() + 1) + '월';
+// customTabName이 주어지면 그 이름의 탭을 그대로 찾거나 새로 만들고,
+// 없으면 날짜 기준 "26.9월" 형태의 월별 탭을 찾거나 만듭니다. 둘 다 없으면 '양식' 탭을 복제합니다.
+function getOrCreateMonthSheet(ss, dateStr, customTabName) {
+  var tabName = (customTabName && String(customTabName).trim()) ? String(customTabName).trim() : autoTabName(dateStr);
   var sheet = ss.getSheetByName(tabName);
   if (!sheet) {
     var template = ss.getSheetByName(TEMPLATE_SHEET_NAME);
@@ -809,6 +1083,11 @@ function getOrCreateMonthSheet(ss, dateStr) {
   return sheet;
 }
 
+function autoTabName(dateStr) {
+  var d = new Date(dateStr);
+  return (d.getFullYear() % 100) + '.' + (d.getMonth() + 1) + '월';
+}
+
 // 시트에 row번째 행이 아직 없으면 자동으로 행을 늘려줍니다 (범위 초과 오류 방지)
 function ensureRowExists(sheet, row) {
   var maxRows = sheet.getMaxRows();
@@ -818,8 +1097,9 @@ function ensureRowExists(sheet, row) {
 }
 
 // A열(날짜) 기준 START_ROW부터 아래로 내려가며 비어있는 첫 행을 찾아
-// 날짜|사용처|사용내역|금액|사진 순서로 기입합니다. 칸이 차있으면 계속 다음 행으로 넘어갑니다.
-function writeExpenseRow(sheet, data, imageUrl) {
+// 날짜|사용처|사용내역|금액|사진1(E)|사진2(F)|사진3(G) 순서로 기입합니다.
+// 칸이 차있으면 계속 다음 행으로 넘어갑니다.
+function writeExpenseRow(sheet, data, imageUrls) {
   var row = START_ROW;
   while (true) {
     ensureRowExists(sheet, row);
@@ -828,19 +1108,22 @@ function writeExpenseRow(sheet, data, imageUrl) {
     row++;
   }
 
-  // 열 순서: A=날짜 | B=사용처 | C=사용내역 | D=금액 | E=사진
+  // 열 순서: A=날짜 | B=사용처 | C=사용내역 | D=금액 | E/F/G=사진1/2/3
   sheet.getRange(row, 1).setValue(data.date);
   sheet.getRange(row, 2).setValue(data.shopName);
   sheet.getRange(row, 3).setValue(data.items);
   sheet.getRange(row, 4).setValue(data.amount);
-  if (imageUrl) sheet.getRange(row, 5).setFormula('=IMAGE("' + imageUrl + '")');
+  for (var i = 0; i < imageUrls.length && i < 3; i++) {
+    if (imageUrls[i]) sheet.getRange(row, PHOTO_START_COL + i).setFormula('=IMAGE("' + imageUrls[i] + '")');
+  }
 }
 
-// base64 영수증 이미지를 구글 드라이브에 업로드하고 썸네일 URL 반환
-function uploadImageToDrive(base64, mimeType, shopName, dateStr) {
+// base64 영수증 이미지를 구글 드라이브에 업로드하고 썸네일 URL 반환 (한 건에 최대 3장까지 지원)
+function uploadImageToDrive(base64, mimeType, shopName, dateStr, index) {
   var folder = getOrCreateFolder(DRIVE_FOLDER_NAME);
   var ext = (mimeType && mimeType.indexOf('png') !== -1) ? 'png' : 'jpg';
-  var fileName = dateStr + '_' + (shopName || '영수증') + '.' + ext;
+  var suffix = index ? '_' + (index + 1) : '';
+  var fileName = dateStr + '_' + (shopName || '영수증') + suffix + '.' + ext;
   var bytes = Utilities.base64Decode(base64);
   var blob = Utilities.newBlob(bytes, mimeType || 'image/jpeg', fileName);
   var file = folder.createFile(blob);
@@ -888,10 +1171,13 @@ function bindEvents() {
   document.getElementById('btn-submit').addEventListener('click', submitExpense);
   document.getElementById('btn-delete').addEventListener('click', deleteExpense);
 
-  document.getElementById('input-camera').addEventListener('change', e => handleFileSelect(e.target.files[0]));
-  document.getElementById('input-gallery').addEventListener('change', e => handleFileSelect(e.target.files[0]));
-  document.getElementById('input-reshoot').addEventListener('change', e => handleFileSelect(e.target.files[0]));
-  document.getElementById('btn-reshoot').addEventListener('click', () => document.getElementById('input-reshoot').click());
+  document.getElementById('input-camera').addEventListener('change', e => { handleFilesSelected(e.target.files); e.target.value = ''; });
+  document.getElementById('input-gallery').addEventListener('change', e => { handleFilesSelected(e.target.files); e.target.value = ''; });
+  ['field-date', 'field-amount', 'field-shop'].forEach(elId => {
+    document.getElementById(elId).addEventListener('input', () => {
+      document.getElementById(elId).classList.remove('border-amber-400', 'bg-amber-50', 'ring-2', 'ring-amber-200');
+    });
+  });
 
   document.getElementById('btn-settings').addEventListener('click', checkAdminAccessAndOpen);
   document.getElementById('btn-close-settings').addEventListener('click', closeSettings);
@@ -899,6 +1185,7 @@ function bindEvents() {
   document.getElementById('btn-save-settings').addEventListener('click', saveSettingsForm);
   document.getElementById('btn-copy-script').addEventListener('click', copyAppsScriptCode);
   document.getElementById('btn-export-settings').addEventListener('click', exportSettingsCode);
+  document.getElementById('btn-add-tab').addEventListener('click', addCustomTab);
 }
 
 init();
