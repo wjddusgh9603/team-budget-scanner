@@ -219,7 +219,7 @@
   </div>
 
   <!-- FAB -->
-  <button id="btn-fab" class="fixed z-30 bottom-6 right-6 w-15 h-15 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 fab-shadow flex items-center justify-center active:scale-95 transition" style="width:58px;height:58px; max-width:480px;">
+  <button id="btn-fab" class="fixed z-30 bottom-6 w-15 h-15 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 fab-shadow flex items-center justify-center active:scale-95 transition" style="width:58px;height:58px; right:max(1.5rem, calc(50vw - 216px));">
     <i class="ph-bold ph-camera-plus text-white text-2xl"></i>
   </button>
 
@@ -272,7 +272,7 @@
   </div>
 
   <!-- Toast -->
-  <div id="toast" class="toast hidden fixed z-50 bottom-24 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[13px] font-medium rounded-full px-4 py-2.5 shadow-lg whitespace-nowrap"></div>
+  <div id="toast" class="toast hidden fixed z-50 bottom-24 bg-gray-900 text-white text-[13px] font-medium rounded-full px-4 py-2.5 shadow-lg whitespace-nowrap" style="left:50%; transform:translateX(-50%);"></div>
 
 </div>
 
@@ -747,8 +747,22 @@ function compressImage(source) {
   const dataUrl = canvas.toDataURL(outType, 0.92);
   const base64 = dataUrl.split(',')[1];
 
+  // 구글 시트 셀 삽입용 축소 썸네일. Google Sheets의 insertImage는 최대 100만 픽셀 / 2MB
+  // 제한이 있어서, AI 인식용 원본(base64)과는 별도로 훨씬 작은 사본을 하나 더 만들어둡니다.
+  const THUMB_MAX = 700; // 700x700 이하 = 최대 49만 픽셀로 안전하게 제한선 아래
+  let tWidth = width, tHeight = height;
+  if (tWidth > THUMB_MAX || tHeight > THUMB_MAX) {
+    const tScale = THUMB_MAX / Math.max(tWidth, tHeight);
+    tWidth = Math.round(tWidth * tScale);
+    tHeight = Math.round(tHeight * tScale);
+  }
+  const thumbCanvas = document.createElement('canvas');
+  thumbCanvas.width = tWidth; thumbCanvas.height = tHeight;
+  thumbCanvas.getContext('2d').drawImage(canvas, 0, 0, tWidth, tHeight);
+  const sheetBase64 = thumbCanvas.toDataURL(outType, 0.8).split(',')[1];
+
   if (source.close) source.close(); // ImageBitmap 메모리 해제
-  return { base64, mimeType: outType, dataUrl };
+  return { base64, mimeType: outType, dataUrl, sheetBase64 };
 }
 
 // 자동 명암 보정: 어둡거나 흐릿하게 찍힌 영수증의 밝기 대비를 넓혀 글자를 더 또렷하게 만듭니다.
@@ -776,6 +790,34 @@ function autoEnhance(ctx, width, height) {
   }
 }
 function clamp255(v) { return Math.max(0, Math.min(255, v)); }
+
+// 구글 시트에 insertImage()로 삽입할 전용 축소 썸네일을 만듭니다.
+// Apps Script insertImage()는 최대 2MB / 최대 100만 픽셀 제한이 있어,
+// AI 스캔용 고화질 원본과 별도로 훨씬 작은 버전을 새로 만들어 보냅니다.
+function makeSheetThumbnail(dataUrl) {
+  const MAX_DIM = 700;
+  const MAX_PIXELS = 900000; // 100만 픽셀 한도 대비 여유를 둠
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let width = img.width, height = img.height;
+      const dimScale = Math.min(1, MAX_DIM / Math.max(width, height));
+      width = Math.round(width * dimScale);
+      height = Math.round(height * dimScale);
+      if (width * height > MAX_PIXELS) {
+        const pixelScale = Math.sqrt(MAX_PIXELS / (width * height));
+        width = Math.max(1, Math.round(width * pixelScale));
+        height = Math.max(1, Math.round(height * pixelScale));
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', 0.75).split(',')[1]);
+    };
+    img.onerror = () => reject(new Error('썸네일 생성 실패'));
+    img.src = dataUrl;
+  });
+}
 
 /* =========================================================================
    GEMINI API SCAN
@@ -917,7 +959,7 @@ async function submitExpense() {
     team: currentTeam,
     date, amount, category, shopName, items,
     tabName: document.getElementById('field-tab').value || null,
-    images: currentImages.map(img => ({ base64: img.base64, mimeType: img.mimeType }))
+    images: currentImages.map(img => ({ base64: img.sheetBase64 || img.base64, mimeType: img.mimeType }))
   };
 
   if (editingId) {
@@ -950,10 +992,17 @@ async function syncToSheet(expense) {
   if (!sheetId) return showToast(`${expense.team}의 시트 ID가 설정되지 않았어요`, 'info');
 
   try {
+    // 스캔용 고화질 이미지를 그대로 보내면 Apps Script insertImage()의 용량 제한
+    // (최대 2MB, 최대 100만 픽셀)을 넘을 수 있어, 시트 전송용으로 별도로 축소한 썸네일을 만든다.
+    const thumbImages = await Promise.all((expense.images || []).map(async img => ({
+      base64: await makeSheetThumbnail(`data:${img.mimeType};base64,${img.base64}`),
+      mimeType: 'image/jpeg'
+    })));
+
     const res = await fetch(settings.webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ sheetId, ...expense })
+      body: JSON.stringify({ sheetId, ...expense, images: thumbImages })
     });
     // Apps Script 웹훅은 내부 오류가 나도 HTTP 200을 그대로 돌려주므로,
     // fetch 성공 여부가 아니라 응답 본문의 result 값을 직접 확인해야 실제 성공/실패를 알 수 있음.
