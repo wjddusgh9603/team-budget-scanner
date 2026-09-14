@@ -70,6 +70,1174 @@
   </header>
 
   <!-- ===================== 팀 접속 코드 잠금 화면 ===================== -->
+  <div id="lock-screen" class="hidden fixed inset-0 z-40 bg-white flex-col items-center justify-center px-6 text-center">
+    <button id="btn-lock-cancel" class="absolute top-5 right-5 w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
+      <i class="ph ph-x text-lg text-gray-500"></i>
+    </button>
+    <div class="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center mb-4">
+      <i class="ph-fill ph-lock-key text-3xl text-blue-600"></i>
+    </div>
+    <p class="text-sm text-gray-400 mb-1">접속 코드가 필요해요</p>
+    <div class="relative mb-5">
+      <select id="lock-team-select" class="appearance-none bg-gray-100 text-base font-bold text-gray-900 rounded-full pl-4 pr-9 py-2 cursor-pointer"></select>
+      <i class="ph ph-caret-down text-xs text-gray-500 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+    </div>
+    <input id="lock-code-input" type="text" inputmode="numeric" placeholder="코드 입력" class="w-full max-w-xs bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 text-center text-lg tracking-widest mb-3 transition-colors">
+    <button id="btn-lock-submit" class="w-full max-w-xs bg-blue-600 hover:bg-blue-700 transition text-white font-bold rounded-xl py-3.5">확인</button>
+  </div>
+
+  <!-- ===================== VIEW 1: DASHBOARD ===================== -->
+  <main id="view-dashboard" class="view px-4 pt-5 pb-28">
+
+    <!-- Summary card -->
+    <section class="rounded-3xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-5 shadow-lg shadow-blue-600/20">
+      <p id="summary-month-label" class="text-xs font-medium text-blue-100">이번 달 지출</p>
+      <div class="flex items-end justify-between mt-1.5">
+        <h2 id="summary-total" class="text-[30px] font-extrabold tracking-tight">0원</h2>
+        <div class="text-right">
+          <p id="summary-count" class="text-sm font-semibold text-blue-50">0건</p>
+          <p class="text-[11px] text-blue-200">총 결제 건수</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Category chart -->
+    <section class="mt-4 bg-white rounded-3xl p-5 border border-gray-100">
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="text-sm font-bold text-gray-800">카테고리별 지출 비율</h3>
+      </div>
+      <div id="chart-wrap" class="relative flex items-center gap-4">
+        <div class="relative w-[132px] h-[132px] shrink-0">
+          <canvas id="category-chart"></canvas>
+          <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <span id="chart-center-label" class="text-[11px] text-gray-400">카테고리</span>
+            <span id="chart-center-count" class="text-lg font-bold text-gray-800">0</span>
+          </div>
+        </div>
+        <div id="chart-legend" class="flex-1 flex flex-col gap-1.5 text-[12.5px]"></div>
+      </div>
+      <p id="chart-empty" class="hidden text-center text-sm text-gray-400 py-6">이번 달 등록된 지출이 없어요</p>
+    </section>
+
+    <!-- Recent list -->
+    <section class="mt-4">
+      <div class="flex items-center justify-between mb-2 px-1">
+        <h3 class="text-sm font-bold text-gray-800">최근 결제 내역</h3>
+        <span id="list-count" class="text-xs text-gray-400"></span>
+      </div>
+      <div id="recent-list" class="flex flex-col gap-2"></div>
+      <div id="list-empty" class="hidden flex-col items-center justify-center text-center py-14 text-gray-400">
+        <i class="ph ph-receipt text-4xl mb-2 text-gray-300"></i>
+        <p class="text-sm font-medium">아직 등록된 영수증이 없어요</p>
+        <p class="text-xs mt-1 text-gray-350">오른쪽 아래 카메라 버튼을 눌러 시작하세요</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===================== VIEW 2: RECEIPT FORM ===================== -->
+  <main id="view-form" class="view hidden px-4 pt-4 pb-32">
+    <div class="flex items-center gap-3 mb-4">
+      <button id="btn-back" class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center"><i class="ph ph-arrow-left text-lg text-gray-700"></i></button>
+      <h2 id="form-title" class="text-base font-bold text-gray-900">영수증 등록</h2>
+    </div>
+
+    <!-- image capture (최대 3장) -->
+    <div id="image-drop" class="rounded-2xl border-2 border-dashed border-gray-200 bg-white overflow-hidden">
+      <div id="image-empty-state" class="flex flex-col items-center justify-center py-8 px-4">
+        <div class="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center mb-3">
+          <i class="ph ph-camera text-2xl text-blue-600"></i>
+        </div>
+        <p class="text-sm text-gray-500 mb-4 text-center">영수증 사진을 촬영하거나<br/>앨범에서 선택하면 자동으로 입력돼요 (최대 3장)</p>
+        <div class="flex gap-2 w-full max-w-xs">
+          <label class="flex-1 cursor-pointer text-center text-sm font-semibold bg-blue-600 hover:bg-blue-700 transition text-white rounded-xl py-2.5">
+            <i class="ph ph-camera mr-1"></i> 카메라 촬영
+            <input id="input-camera" type="file" accept="image/*" capture="environment" class="hidden">
+          </label>
+          <label class="flex-1 cursor-pointer text-center text-sm font-semibold bg-gray-100 hover:bg-gray-200 transition text-gray-700 rounded-xl py-2.5">
+            <i class="ph ph-image mr-1"></i> 앨범 선택
+            <input id="input-gallery" type="file" accept="image/*" multiple class="hidden">
+          </label>
+        </div>
+      </div>
+      <div id="image-grid-state" class="hidden p-3">
+        <div id="image-grid" class="grid grid-cols-3 gap-2"></div>
+        <p class="text-[11px] text-gray-400 text-center mt-2">영수증이 길면 나눠서 최대 3장까지 첨부할 수 있어요</p>
+      </div>
+    </div>
+
+    <!-- fields -->
+    <div class="mt-5 flex flex-col gap-4">
+      <div>
+        <label class="text-xs font-semibold text-gray-500 mb-1.5 block">결제일자</label>
+        <input id="field-date" type="date" class="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-3 text-sm font-medium text-gray-800 transition-colors">
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-gray-500 mb-1.5 block">업로드할 시트 탭</label>
+        <div class="flex gap-2">
+          <select id="field-tab" class="flex-1 bg-white border border-gray-200 rounded-xl px-3.5 py-3 text-sm font-medium text-gray-800"></select>
+          <button type="button" id="btn-add-tab" class="w-12 shrink-0 rounded-xl bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center">
+            <i class="ph ph-plus text-lg text-gray-600"></i>
+          </button>
+        </div>
+        <p class="text-[11px] text-gray-400 mt-1.5">보통은 "자동"으로 두세요. 원정 경기 등 별도 탭이 필요할 때만 "+"로 새 탭을 추가해 선택하세요.</p>
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-gray-500 mb-1.5 block">결제금액</label>
+        <div class="relative">
+          <input id="field-amount" type="number" inputmode="numeric" placeholder="0" class="w-full bg-white border border-gray-200 rounded-xl pl-3.5 pr-10 py-3 text-sm font-medium text-gray-800 transition-colors">
+          <span class="absolute right-3.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">원</span>
+        </div>
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-gray-500 mb-1.5 block">카테고리</label>
+        <select id="field-category" class="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-3 text-sm font-medium text-gray-800"></select>
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-gray-500 mb-1.5 block">사용처</label>
+        <input id="field-shop" type="text" placeholder="예: 댓잎갈비" class="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-3 text-sm font-medium text-gray-800 transition-colors">
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-gray-500 mb-1.5 block">사용내역</label>
+        <textarea id="field-items" rows="2" placeholder="예: 코칭스태프 중식 5인" class="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-3 text-sm font-medium text-gray-800 resize-none"></textarea>
+      </div>
+      <p id="confidence-warning" class="hidden text-xs text-amber-600 bg-amber-50 rounded-xl px-3.5 py-2.5 items-center gap-1.5"><i class="ph-fill ph-warning-circle"></i><span></span></p>
+    </div>
+
+    <div class="mt-6 flex gap-2">
+      <button id="btn-delete" class="hidden w-14 shrink-0 rounded-xl bg-red-50 text-red-500 items-center justify-center">
+        <i class="ph ph-trash text-lg"></i>
+      </button>
+      <button id="btn-submit" class="flex-1 bg-blue-600 hover:bg-blue-700 transition text-white font-bold text-sm rounded-xl py-3.5">저장하기</button>
+    </div>
+  </main>
+
+  <!-- AI scanning overlay -->
+  <div id="scan-overlay" class="hidden fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex-col items-center justify-center gap-3">
+    <div class="spinner"></div>
+    <p class="text-white text-sm font-semibold">AI가 영수증을 분석하고 있어요…</p>
+    <p class="text-blue-200 text-xs">날짜·금액·상호명을 자동으로 읽는 중</p>
+  </div>
+
+  <!-- FAB -->
+  <button id="btn-fab" class="fixed z-30 bottom-6 right-6 w-15 h-15 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 fab-shadow flex items-center justify-center active:scale-95 transition" style="width:58px;height:58px; max-width:480px;">
+    <i class="ph-bold ph-camera-plus text-white text-2xl"></i>
+  </button>
+
+  <!-- ===================== SETTINGS MODAL ===================== -->
+  <div id="modal-settings" class="hidden fixed inset-0 z-40 modal-backdrop">
+    <div class="absolute inset-0 bg-black/40" id="settings-backdrop-close"></div>
+    <div class="modal-sheet absolute bottom-0 left-0 right-0 max-w-[480px] mx-auto bg-white rounded-t-3xl max-h-[88vh] flex flex-col">
+      <div class="px-5 pt-4 pb-2 flex items-center justify-between border-b border-gray-100">
+        <h3 class="text-base font-bold text-gray-900">앱 설정</h3>
+        <button id="btn-close-settings" class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"><i class="ph ph-x text-gray-600"></i></button>
+      </div>
+      <div class="px-5 py-4 overflow-y-auto flex flex-col gap-5">
+
+        <div>
+          <label class="text-xs font-semibold text-gray-500 mb-1.5 block">Gemini API Key</label>
+          <input id="settings-api-key" type="password" placeholder="AIza..." class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm">
+          <p class="text-[11px] text-gray-400 mt-1.5">비워두면 시뮬레이션 모드로 동작해요.</p>
+        </div>
+
+        <div>
+          <label class="text-xs font-semibold text-gray-500 mb-1.5 block">Apps Script Webhook URL</label>
+          <input id="settings-webhook" type="text" placeholder="https://script.google.com/macros/s/.../exec" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm">
+        </div>
+
+        <div>
+          <label class="text-xs font-semibold text-gray-500 mb-2 block">팀별 구글 시트 ID / 접속 코드</label>
+          <div id="settings-sheet-ids" class="flex flex-col gap-3"></div>
+          <p class="text-[11px] text-gray-400 mt-1.5">접속 코드를 입력해두면, 그 코드를 아는 사람만 해당 팀 대시보드/업로드에 접근할 수 있어요. 비워두면 누구나 접근 가능합니다.</p>
+        </div>
+
+        <button id="btn-copy-script" class="w-full flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 transition text-white text-sm font-semibold rounded-xl py-3">
+          <i class="ph ph-copy"></i> 통합 Apps Script 코드 복사
+        </button>
+        <p class="text-[11px] text-gray-400 -mt-3 text-center leading-relaxed">팀 시트의 확장 프로그램 &gt; Apps Script에 붙여넣고<br/>웹앱으로 배포한 뒤, 위 Webhook URL에 입력하세요.</p>
+
+        <div class="pt-4 border-t border-gray-100">
+          <label class="text-xs font-semibold text-gray-500 mb-1.5 block">관리자 PIN (선택)</label>
+          <input id="settings-admin-pin" type="text" inputmode="numeric" placeholder="예: 1234 (설정하면 이 PIN을 아는 사람만 설정 화면을 열 수 있어요)" class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm">
+        </div>
+
+        <button id="btn-export-settings" class="w-full flex items-center justify-center gap-2 bg-indigo-50 hover:bg-indigo-100 transition text-indigo-700 text-sm font-semibold rounded-xl py-3">
+          <i class="ph ph-code"></i> 관리자 설정을 코드로 내보내기
+        </button>
+        <p class="text-[11px] text-gray-400 -mt-3 text-center leading-relaxed">지금 입력한 값들을 코드로 복사합니다. index.html의<br/><code class="bg-gray-100 px-1 rounded">BAKED_SETTINGS</code> 부분에 붙여넣고 GitHub에 다시 올리면<br/>다른 사람들은 설정 없이 바로 사용할 수 있어요.</p>
+      </div>
+      <div class="px-5 py-4 border-t border-gray-100">
+        <button id="btn-save-settings" class="w-full bg-blue-600 hover:bg-blue-700 transition text-white font-bold text-sm rounded-xl py-3.5">저장하고 닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast hidden fixed z-50 bottom-24 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[13px] font-medium rounded-full px-4 py-2.5 shadow-lg whitespace-nowrap"></div>
+
+</div>
+
+<script>
+/* =========================================================================
+   CONSTANTS
+   ========================================================================= */
+const TEAMS = ['U18', 'U15', 'U12', 'U18 치료실', 'U15 치료실'];
+const CATEGORIES = ['식사비', '간식비', '연습경기 간식비', '리그경기 간식비', '의료/비품비', '기타'];
+const CATEGORY_META = {
+  '식사비':          { icon: 'ph-fork-knife',    color: '#2563eb' },
+  '간식비':          { icon: 'ph-cookie',        color: '#6366f1' },
+  '연습경기 간식비': { icon: 'ph-soccer-ball',   color: '#0891b2' },
+  '리그경기 간식비': { icon: 'ph-trophy',        color: '#7c3aed' },
+  '의료/비품비':     { icon: 'ph-first-aid-kit', color: '#dc2626' },
+  '기타':            { icon: 'ph-dots-three-circle', color: '#6b7280' }
+};
+// ⚙️ 관리자 전용 기본 설정값. 설정 모달에서 값을 채운 뒤 "관리자 설정을 코드로 내보내기"
+// 버튼으로 복사한 코드를 이 객체 자리에 붙여넣고 GitHub에 다시 커밋하면, 그 이후로는
+// 어떤 브라우저/기기로 접속하든(로컬 설정이 없는 사람은) 이 값이 자동으로 적용됩니다.
+// adminPin을 설정해두면, 설정 화면은 이 PIN을 아는 관리자만 열 수 있습니다.
+const BAKED_SETTINGS = {
+  geminiApiKey: '',
+  webhookUrl: '',
+  sheetIds: { 'U18': '', 'U15': '', 'U12': '', 'U18 치료실': '', 'U15 치료실': '' },
+  teamCodes: { 'U18': '', 'U15': '', 'U12': '', 'U18 치료실': '', 'U15 치료실': '' }, // 팀별 접속 코드(선택). 비워두면 제한 없음.
+  adminPin: ''
+};
+const LS_SETTINGS = 'tbs_settings';
+const LS_EXPENSES = 'tbs_expenses';
+const LS_TEAM = 'tbs_current_team';
+const LS_TAB_HISTORY_PREFIX = 'tbs_tab_history_'; // 팀별 최근 사용한 시트 탭 이름 기록
+const LS_UNLOCKED_TEAMS = 'tbs_unlocked_teams'; // 이 기기에서 접속 코드를 확인한 팀 목록
+const SS_ADMIN_UNLOCKED = 'tbs_admin_unlocked'; // 세션 동안만 유지 (sessionStorage)
+
+/* =========================================================================
+   STATE
+   ========================================================================= */
+let settings = loadSettings();
+let expenses = loadExpenses();
+let currentTeam = localStorage.getItem(LS_TEAM) || TEAMS[0];
+let currentImages = [];       // [{ base64, mimeType, dataUrl }, ...] 최대 3장
+let editingId = null;
+let chartInstance = null;
+
+/* =========================================================================
+   PERSISTENCE
+   ========================================================================= */
+function loadSettings() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LS_SETTINGS));
+    if (!raw) return JSON.parse(JSON.stringify(BAKED_SETTINGS));
+    // 한때 시트를 자유롭게 추가하는 teams 배열 형태로 저장된 적이 있다면 다시 sheetIds 형태로 변환
+    let sheetIds = raw.sheetIds;
+    if (!sheetIds && Array.isArray(raw.teams)) {
+      sheetIds = {};
+      raw.teams.forEach(t => { if (t && t.name) sheetIds[t.name] = t.sheetId || ''; });
+    }
+    return { ...BAKED_SETTINGS, ...raw, sheetIds: { ...BAKED_SETTINGS.sheetIds, ...(sheetIds || {}) }, teamCodes: { ...BAKED_SETTINGS.teamCodes, ...(raw.teamCodes || {}) } };
+  } catch { return JSON.parse(JSON.stringify(BAKED_SETTINGS)); }
+}
+function saveSettings() { localStorage.setItem(LS_SETTINGS, JSON.stringify(settings)); }
+
+function loadExpenses() {
+  try { return JSON.parse(localStorage.getItem(LS_EXPENSES)) || []; }
+  catch { return []; }
+}
+function saveExpenses() { localStorage.setItem(LS_EXPENSES, JSON.stringify(expenses)); }
+
+/* =========================================================================
+   INIT
+   ========================================================================= */
+function init() {
+  refreshTeamSelect();
+  document.getElementById('team-select').addEventListener('change', e => selectTeam(e.target.value));
+
+  // 잠금 화면
+  document.getElementById('lock-team-select').addEventListener('change', e => {
+    const t = e.target.value;
+    if (isTeamUnlocked(t)) selectTeam(t);
+    else showLockScreen(t);
+  });
+  document.getElementById('btn-lock-submit').addEventListener('click', submitLockCode);
+  document.getElementById('lock-code-input').addEventListener('keydown', e => { if (e.key === 'Enter') submitLockCode(); });
+  document.getElementById('btn-lock-cancel').addEventListener('click', () => {
+    hideLockScreen();
+    refreshTeamSelect(); // 헤더 드롭다운을 실제 currentTeam으로 되돌림
+  });
+
+  // category select
+  const catSel = document.getElementById('field-category');
+  catSel.innerHTML = CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('');
+
+  bindEvents();
+  selectTeam(currentTeam); // 잠금 여부를 확인한 뒤 대시보드를 그리거나 잠금 화면을 띄움
+}
+
+function refreshTeamSelect() {
+  const teamSel = document.getElementById('team-select');
+  teamSel.innerHTML = TEAMS.map(t => `<option value="${t}" ${t === currentTeam ? 'selected' : ''}>${t}</option>`).join('');
+}
+
+/* =========================================================================
+   팀별 접속 코드 (소프트 잠금 — 실수로 다른 팀에 업로드/열람하는 것을 방지)
+   ========================================================================= */
+function getTeamCode(teamName) { return (settings.teamCodes && settings.teamCodes[teamName]) || ''; }
+function loadUnlockedTeams() {
+  try { return JSON.parse(localStorage.getItem(LS_UNLOCKED_TEAMS)) || []; } catch { return []; }
+}
+function isTeamUnlocked(teamName) {
+  const code = getTeamCode(teamName);
+  if (!code) return true; // 코드가 설정되어 있지 않으면 제한 없음
+  return loadUnlockedTeams().includes(teamName);
+}
+function markTeamUnlocked(teamName) {
+  const list = loadUnlockedTeams();
+  if (!list.includes(teamName)) {
+    list.push(teamName);
+    localStorage.setItem(LS_UNLOCKED_TEAMS, JSON.stringify(list));
+  }
+}
+
+// 팀을 선택 시도합니다. 잠겨있으면 대시보드 대신 잠금 화면을 보여줍니다.
+function selectTeam(teamName) {
+  if (isTeamUnlocked(teamName)) {
+    currentTeam = teamName;
+    localStorage.setItem(LS_TEAM, currentTeam);
+    refreshTeamSelect();
+    hideLockScreen();
+    renderDashboard();
+  } else {
+    showLockScreen(teamName);
+  }
+}
+
+function showLockScreen(teamName) {
+  const sel = document.getElementById('lock-team-select');
+  sel.innerHTML = TEAMS.map(t => `<option value="${t}" ${t === teamName ? 'selected' : ''}>${t}</option>`).join('');
+  document.getElementById('lock-code-input').value = '';
+  document.getElementById('lock-code-input').classList.remove('border-red-400', 'ring-2', 'ring-red-100');
+  const lockScreen = document.getElementById('lock-screen');
+  lockScreen.classList.remove('hidden');
+  lockScreen.classList.add('flex');
+  setTimeout(() => document.getElementById('lock-code-input').focus(), 50);
+}
+function hideLockScreen() {
+  const lockScreen = document.getElementById('lock-screen');
+  lockScreen.classList.add('hidden');
+  lockScreen.classList.remove('flex');
+}
+function submitLockCode() {
+  const teamName = document.getElementById('lock-team-select').value;
+  const input = document.getElementById('lock-code-input').value.trim();
+  const code = getTeamCode(teamName);
+  if (!code || input === code) {
+    if (code) markTeamUnlocked(teamName);
+    selectTeam(teamName);
+  } else {
+    showToast('접속 코드가 올바르지 않아요', 'error');
+    document.getElementById('lock-code-input').classList.add('border-red-400', 'ring-2', 'ring-red-100');
+  }
+}
+
+/* =========================================================================
+   VIEW NAVIGATION
+   ========================================================================= */
+function showView(name) {
+  document.getElementById('view-dashboard').classList.toggle('hidden', name !== 'dashboard');
+  document.getElementById('view-form').classList.toggle('hidden', name !== 'form');
+  document.getElementById('btn-fab').classList.toggle('hidden', name !== 'dashboard');
+}
+
+function openForm(expense = null) {
+  editingId = expense ? expense.id : null;
+  // 이전 형식(단일 imageBase64)과 새 형식(images 배열) 모두 지원
+  if (expense && Array.isArray(expense.images) && expense.images.length) {
+    currentImages = expense.images.map(img => ({ base64: img.base64, mimeType: img.mimeType, dataUrl: `data:${img.mimeType};base64,${img.base64}` }));
+  } else if (expense && expense.imageBase64) {
+    currentImages = [{ base64: expense.imageBase64, mimeType: expense.imageType, dataUrl: `data:${expense.imageType};base64,${expense.imageBase64}` }];
+  } else {
+    currentImages = [];
+  }
+
+  document.getElementById('form-title').textContent = expense ? '영수증 수정' : '영수증 등록';
+  document.getElementById('btn-delete').classList.toggle('hidden', !expense);
+  document.getElementById('btn-delete').classList.toggle('flex', !!expense);
+  document.getElementById('field-date').value = expense ? expense.date : new Date().toISOString().slice(0, 10);
+  document.getElementById('field-amount').value = expense ? expense.amount : '';
+  document.getElementById('field-category').value = expense ? expense.category : CATEGORIES[0];
+  document.getElementById('field-shop').value = expense ? expense.shopName : '';
+  document.getElementById('field-items').value = expense ? expense.items : '';
+  populateTabSelect(expense ? (expense.tabName || '') : '');
+  clearConfidenceHighlights();
+
+  renderImageState();
+  showView('form');
+}
+
+function renderImageState() {
+  const empty = document.getElementById('image-empty-state');
+  const gridState = document.getElementById('image-grid-state');
+  const grid = document.getElementById('image-grid');
+
+  if (currentImages.length === 0) {
+    empty.classList.remove('hidden');
+    gridState.classList.add('hidden');
+    grid.innerHTML = '';
+    return;
+  }
+  empty.classList.add('hidden');
+  gridState.classList.remove('hidden');
+
+  let html = currentImages.map((img, idx) => `
+    <div class="relative aspect-square rounded-xl overflow-hidden bg-gray-100">
+      <img src="${img.dataUrl}" class="w-full h-full object-cover">
+      <button type="button" data-idx="${idx}" class="remove-image-btn absolute top-1 right-1 bg-black/60 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] leading-none">
+        <i class="ph ph-x"></i>
+      </button>
+    </div>`).join('');
+
+  if (currentImages.length < 3) {
+    html += `
+      <div class="aspect-square rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center gap-3">
+        <button type="button" id="btn-add-camera" class="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center"><i class="ph ph-camera text-base"></i></button>
+        <button type="button" id="btn-add-gallery" class="w-8 h-8 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center"><i class="ph ph-image text-base"></i></button>
+      </div>`;
+  }
+  grid.innerHTML = html;
+
+  grid.querySelectorAll('.remove-image-btn').forEach(btn => {
+    btn.addEventListener('click', () => removeImage(Number(btn.dataset.idx)));
+  });
+  const addCam = document.getElementById('btn-add-camera');
+  const addGal = document.getElementById('btn-add-gallery');
+  if (addCam) addCam.addEventListener('click', () => document.getElementById('input-camera').click());
+  if (addGal) addGal.addEventListener('click', () => document.getElementById('input-gallery').click());
+}
+
+function removeImage(idx) {
+  currentImages.splice(idx, 1);
+  renderImageState();
+  if (currentImages.length > 0) {
+    scanReceipt(currentImages.map(i => ({ base64: i.base64, mimeType: i.mimeType })));
+  }
+}
+
+/* =========================================================================
+   시트 탭 선택/추가 (예: 자동 "26.9월" 외에 "26.9월(천안)" 같은 별도 탭)
+   ========================================================================= */
+function loadTabHistory(team) {
+  try { return JSON.parse(localStorage.getItem(LS_TAB_HISTORY_PREFIX + team)) || []; }
+  catch { return []; }
+}
+function saveTabHistory(team, list) {
+  localStorage.setItem(LS_TAB_HISTORY_PREFIX + team, JSON.stringify(list));
+}
+function addTabHistory(team, tabName) {
+  const list = loadTabHistory(team);
+  if (!list.includes(tabName)) {
+    list.push(tabName);
+    saveTabHistory(team, list);
+  }
+}
+
+// selectedTabName이 있으면 그 값을 선택한 채로, 없으면 "자동"을 기본값으로 드롭다운을 채웁니다.
+function populateTabSelect(selectedTabName) {
+  const sel = document.getElementById('field-tab');
+  const history = loadTabHistory(currentTeam);
+  // 수정 중인 영수증의 탭 이름이 이 기기의 기록에 없다면(다른 기기에서 추가된 경우 등) 임시로 포함
+  if (selectedTabName && !history.includes(selectedTabName)) history.push(selectedTabName);
+  const options = ['<option value="">자동 (날짜 기준 월별 탭)</option>']
+    .concat(history.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`));
+  sel.innerHTML = options.join('');
+  sel.value = selectedTabName || '';
+}
+
+function addCustomTab() {
+  const name = prompt('추가할 시트 탭 이름을 입력하세요\n예: 26.9월(천안)');
+  if (!name || !name.trim()) return;
+  const trimmed = name.trim();
+  addTabHistory(currentTeam, trimmed);
+  populateTabSelect(trimmed);
+}
+
+/* =========================================================================
+   DASHBOARD RENDERING
+   ========================================================================= */
+function getTeamExpenses(team) {
+  return expenses.filter(e => e.team === team).sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+}
+function isThisMonth(dateStr) {
+  const now = new Date();
+  const d = new Date(dateStr);
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+}
+
+function renderDashboard() {
+  const teamExpenses = getTeamExpenses(currentTeam);
+  const monthExpenses = teamExpenses.filter(e => isThisMonth(e.date));
+
+  const total = monthExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  document.getElementById('summary-month-label').textContent = `${currentTeam} · ${new Date().getMonth() + 1}월 지출`;
+  document.getElementById('summary-total').textContent = total.toLocaleString('ko-KR') + '원';
+  document.getElementById('summary-count').textContent = monthExpenses.length + '건';
+
+  renderChart(monthExpenses);
+  renderRecentList(teamExpenses);
+}
+
+function renderChart(monthExpenses) {
+  const totals = {};
+  CATEGORIES.forEach(c => totals[c] = 0);
+  monthExpenses.forEach(e => { totals[e.category] = (totals[e.category] || 0) + Number(e.amount || 0); });
+
+  const activeCats = CATEGORIES.filter(c => totals[c] > 0);
+  const chartWrap = document.getElementById('chart-wrap');
+  const emptyMsg = document.getElementById('chart-empty');
+
+  if (activeCats.length === 0) {
+    chartWrap.classList.add('hidden');
+    emptyMsg.classList.remove('hidden');
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+    return;
+  }
+  chartWrap.classList.remove('hidden');
+  emptyMsg.classList.add('hidden');
+
+  document.getElementById('chart-center-count').textContent = activeCats.length;
+  document.getElementById('chart-center-label').textContent = '카테고리';
+
+  const ctx = document.getElementById('category-chart').getContext('2d');
+  const data = activeCats.map(c => totals[c]);
+  const colors = activeCats.map(c => CATEGORY_META[c].color);
+
+  if (chartInstance) chartInstance.destroy();
+  chartInstance = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels: activeCats, datasets: [{ data, backgroundColor: colors, borderWidth: 3, borderColor: '#ffffff' }] },
+    options: {
+      cutout: '72%',
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `${c.label}: ${c.raw.toLocaleString('ko-KR')}원` } } }
+    }
+  });
+
+  const grandTotal = data.reduce((a, b) => a + b, 0);
+  document.getElementById('chart-legend').innerHTML = activeCats.map((c, i) => {
+    const pct = grandTotal ? Math.round((data[i] / grandTotal) * 100) : 0;
+    return `<div class="flex items-center justify-between gap-2">
+      <span class="flex items-center gap-1.5 text-gray-600"><span class="w-2 h-2 rounded-full shrink-0" style="background:${colors[i]}"></span>${c}</span>
+      <span class="font-semibold text-gray-800">${pct}%</span>
+    </div>`;
+  }).join('');
+}
+
+function renderRecentList(teamExpenses) {
+  const list = document.getElementById('recent-list');
+  const emptyState = document.getElementById('list-empty');
+  document.getElementById('list-count').textContent = teamExpenses.length ? `총 ${teamExpenses.length}건` : '';
+
+  if (teamExpenses.length === 0) {
+    list.innerHTML = '';
+    list.classList.add('hidden');
+    emptyState.classList.remove('hidden');
+    emptyState.classList.add('flex');
+    return;
+  }
+  list.classList.remove('hidden');
+  emptyState.classList.add('hidden');
+
+  list.innerHTML = teamExpenses.slice(0, 30).map(e => {
+    const meta = CATEGORY_META[e.category] || CATEGORY_META['기타'];
+    const dateLabel = e.date.slice(5).replace('-', '.');
+    return `<button data-id="${e.id}" class="recent-item w-full flex items-center gap-3 bg-white rounded-2xl p-3 border border-gray-100 text-left active:bg-gray-50 transition">
+      <div class="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style="background:${meta.color}1A">
+        <i class="ph-fill ${meta.icon} text-lg" style="color:${meta.color}"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-1.5">
+          <p class="text-sm font-semibold text-gray-900 truncate">${escapeHtml(e.shopName || '상호명 없음')}</p>
+          ${(e.images && e.images.length) || e.imageBase64 ? '<i class="ph-fill ph-image text-[11px] text-gray-300"></i>' : ''}
+        </div>
+        <p class="text-xs text-gray-400 mt-0.5">${dateLabel} · ${e.category}</p>
+      </div>
+      <p class="text-sm font-bold text-gray-900 shrink-0">${Number(e.amount || 0).toLocaleString('ko-KR')}원</p>
+    </button>`;
+  }).join('');
+
+  list.querySelectorAll('.recent-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const exp = expenses.find(x => x.id === btn.dataset.id);
+      if (exp) openForm(exp);
+    });
+  });
+}
+
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+/* =========================================================================
+   IMAGE HANDLING + COMPRESSION + 자동 보정
+   ========================================================================= */
+async function handleFilesSelected(fileList) {
+  const files = Array.from(fileList || []).filter(Boolean);
+  if (files.length === 0) return;
+
+  const remaining = 3 - currentImages.length;
+  if (remaining <= 0) { showToast('사진은 최대 3장까지 첨부할 수 있어요', 'error'); return; }
+
+  const toProcess = files.slice(0, remaining);
+  if (files.length > toProcess.length) showToast('최대 3장까지만 추가됐어요', 'info');
+
+  for (const file of toProcess) {
+    try {
+      const source = await loadImageSource(file);
+      currentImages.push(compressImage(source));
+    } catch (err) {
+      console.error(err);
+      const isLikelyHeic = /heic|heif/i.test(file.type) || /\.heic$|\.heif$/i.test(file.name || '');
+      showToast(isLikelyHeic
+        ? '이 사진 형식(HEIC)은 지원되지 않아요. 아이폰 카메라 설정을 "높은 호환성"으로 바꾸거나 다른 사진을 선택해주세요'
+        : '이미지를 불러오지 못했어요. 다른 사진으로 다시 시도해주세요', 'error');
+    }
+  }
+
+  renderImageState();
+  if (currentImages.length > 0) {
+    scanReceipt(currentImages.map(i => ({ base64: i.base64, mimeType: i.mimeType })));
+  }
+}
+
+// EXIF 방향 정보를 자동으로 반영해 이미지를 로드합니다 (카메라로 찍은 세로 사진이
+// 옆으로 눕거나 뒤집혀서 AI가 글자를 못 읽는 문제를 방지합니다).
+async function loadImageSource(file) {
+  if ('createImageBitmap' in window) {
+    try {
+      return await createImageBitmap(file, { imageOrientation: 'from-image' });
+    } catch (e) {
+      // 일부 브라우저/포맷(HEIC 등)은 createImageBitmap이 실패할 수 있어 아래로 폴백
+    }
+  }
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('이미지 디코딩 실패'));
+      img.src = ev.target.result;
+    };
+    reader.onerror = () => reject(new Error('파일 읽기 실패'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function compressImage(source) {
+  const MAX = 1600; // 글자 인식 정확도를 위해 기존보다 여유있게 확보
+  let width = source.width, height = source.height;
+  if (width > MAX || height > MAX) {
+    const scale = MAX / Math.max(width, height);
+    width = Math.round(width * scale);
+    height = Math.round(height * scale);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width; canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(source, 0, 0, width, height);
+  autoEnhance(ctx, width, height);
+
+  const outType = 'image/jpeg';
+  const dataUrl = canvas.toDataURL(outType, 0.92);
+  const base64 = dataUrl.split(',')[1];
+
+  if (source.close) source.close(); // ImageBitmap 메모리 해제
+  return { base64, mimeType: outType, dataUrl };
+}
+
+// 자동 명암 보정: 어둡거나 흐릿하게 찍힌 영수증의 밝기 대비를 넓혀 글자를 더 또렷하게 만듭니다.
+// (히스토그램 스트레칭 — 별도 라이브러리 없이 캔버스만으로 처리)
+function autoEnhance(ctx, width, height) {
+  try {
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+    let min = 255, max = 0;
+    for (let i = 0; i < data.length; i += 16) { // 성능을 위해 일부 픽셀만 샘플링
+      const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      if (lum < min) min = lum;
+      if (lum > max) max = lum;
+    }
+    const range = max - min;
+    if (range < 20) return; // 이미 대비가 충분하면 그대로 둠
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = clamp255(((data[i] - min) / range) * 255);
+      data[i + 1] = clamp255(((data[i + 1] - min) / range) * 255);
+      data[i + 2] = clamp255(((data[i + 2] - min) / range) * 255);
+    }
+    ctx.putImageData(imageData, 0, 0);
+  } catch (e) {
+    console.warn('자동 보정을 건너뜁니다', e); // 실패해도 원본 화질로 스캔은 계속 진행
+  }
+}
+function clamp255(v) { return Math.max(0, Math.min(255, v)); }
+
+/* =========================================================================
+   GEMINI API SCAN
+   ========================================================================= */
+async function scanReceipt(images) {
+  document.getElementById('scan-overlay').classList.remove('hidden');
+  document.getElementById('scan-overlay').classList.add('flex');
+  try {
+    let data;
+    if (settings.geminiApiKey) {
+      try {
+        data = await callGeminiApi(images, 'gemini-flash-latest');
+      } catch (firstErr) {
+        console.warn('1차 스캔 실패, 더 정밀한 모델로 재시도합니다', firstErr);
+        data = await callGeminiApi(images, 'gemini-pro-latest'); // 실패 시 더 강력한 모델로 1회 재시도
+      }
+    } else {
+      data = await simulateScan();
+    }
+    fillFormFromScan(data);
+    showToast(settings.geminiApiKey ? 'AI 분석이 완료됐어요' : '시뮬레이션 데이터로 채워졌어요', 'success');
+  } catch (err) {
+    console.error(err);
+    showToast('스캔에 실패했어요. 직접 입력해주세요.', 'error');
+  } finally {
+    document.getElementById('scan-overlay').classList.add('hidden');
+    document.getElementById('scan-overlay').classList.remove('flex');
+  }
+}
+
+async function callGeminiApi(images, modelId) {
+  const prompt = `너는 한국 영수증 전문 OCR 어시스턴트야. 아래 영수증 이미지(1~3장, 같은 영수증의 여러 부분/사본일 수 있음)를 최대한 정확히 읽어서 반드시 아래 JSON 형식으로만 응답해. 코드블록(\`\`\`)이나 설명 문장은 절대 포함하지 마.
+{
+  "date": "YYYY-MM-DD",
+  "amount": 숫자(콤마/원 기호 없이 정수),
+  "shopName": "상호명",
+  "items": "주문 품목 및 비고",
+  "category": "식사비 | 간식비 | 연습경기 간식비 | 리그경기 간식비 | 의료/비품비 | 기타 중 하나",
+  "confidence": { "date": "high 또는 low", "amount": "high 또는 low", "shopName": "high 또는 low" }
+}
+규칙:
+- amount는 영수증의 "합계/총액/받을금액" 중 최종 결제 금액을 사용해.
+- 날짜를 찾을 수 없으면 오늘 날짜(${new Date().toISOString().slice(0,10)})를 사용해.
+- category는 반드시 제시된 6개 값 중 하나여야 해.
+- 이미지가 흐리거나 일부만 보여도, 보이는 글자를 최대한 근거로 최선의 추정값을 채워줘.
+- 여러 장이 주어지면 서로 보완해서 읽고, 그래도 자신 없는 값은 confidence를 "low"로 표시해.`;
+
+  const imageParts = images.map(img => ({ inline_data: { mime_type: img.mimeType, data: img.base64 } }));
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${settings.geminiApiKey}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }, ...imageParts] }],
+      generationConfig: { response_mime_type: 'application/json', temperature: 0.1 }
+    })
+  });
+  if (!res.ok) {
+    let detail = '';
+    try { detail = (await res.json())?.error?.message || ''; } catch {}
+    throw new Error(`Gemini API 오류 ${res.status}${detail ? ': ' + detail : ''}`);
+  }
+  const json = await res.json();
+  const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('빈 응답');
+  return JSON.parse(text.replace(/```json|```/g, '').trim());
+}
+
+function simulateScan() {
+  const samples = [
+    { date: new Date().toISOString().slice(0, 10), amount: 97000, shopName: '댓잎갈비', items: '코칭스태프 중식 5인', category: '식사비', confidence: { date: 'high', amount: 'high', shopName: 'high' } },
+    { date: new Date().toISOString().slice(0, 10), amount: 32000, shopName: 'GS25 훈련장점', items: '음료 및 간식', category: '간식비', confidence: { date: 'high', amount: 'low', shopName: 'high' } },
+    { date: new Date().toISOString().slice(0, 10), amount: 15000, shopName: '연습구장 매점', items: '연습경기 간식', category: '연습경기 간식비', confidence: { date: 'high', amount: 'high', shopName: 'low' } },
+    { date: new Date().toISOString().slice(0, 10), amount: 210000, shopName: '온누리약국', items: '테이핑 및 파스', category: '의료/비품비', confidence: { date: 'high', amount: 'high', shopName: 'high' } }
+  ];
+  const pick = samples[Math.floor(Math.random() * samples.length)];
+  return new Promise(resolve => setTimeout(() => resolve(pick), 1200));
+}
+
+// 신뢰도(confidence)가 낮은 항목은 노란색으로 강조해 사용자가 한 번 더 확인하도록 유도합니다.
+const CONFIDENCE_FIELD_MAP = { date: 'field-date', amount: 'field-amount', shopName: 'field-shop' };
+function fillFormFromScan(data) {
+  if (data.date) document.getElementById('field-date').value = data.date;
+  if (data.amount != null) document.getElementById('field-amount').value = data.amount;
+  if (data.shopName) document.getElementById('field-shop').value = data.shopName;
+  if (data.items) document.getElementById('field-items').value = data.items;
+  if (data.category && CATEGORIES.includes(data.category)) document.getElementById('field-category').value = data.category;
+
+  clearConfidenceHighlights();
+  const lowFields = [];
+  const fieldLabels = { date: '결제일자', amount: '결제금액', shopName: '사용처' };
+  if (data.confidence) {
+    Object.entries(CONFIDENCE_FIELD_MAP).forEach(([key, elId]) => {
+      if (data.confidence[key] === 'low') {
+        highlightLowConfidence(elId);
+        lowFields.push(fieldLabels[key]);
+      }
+    });
+  }
+  const warningEl = document.getElementById('confidence-warning');
+  if (lowFields.length > 0) {
+    warningEl.querySelector('span').textContent = `${lowFields.join(', ')} 항목은 AI가 확신하지 못했어요. 다시 한 번 확인해주세요`;
+    warningEl.classList.remove('hidden');
+    warningEl.classList.add('flex');
+  } else {
+    warningEl.classList.add('hidden');
+    warningEl.classList.remove('flex');
+  }
+}
+function highlightLowConfidence(elId) {
+  const el = document.getElementById(elId);
+  el.classList.add('border-amber-400', 'bg-amber-50', 'ring-2', 'ring-amber-200');
+}
+function clearConfidenceHighlights() {
+  ['field-date', 'field-amount', 'field-shop'].forEach(elId => {
+    document.getElementById(elId).classList.remove('border-amber-400', 'bg-amber-50', 'ring-2', 'ring-amber-200');
+  });
+  document.getElementById('confidence-warning').classList.add('hidden');
+  document.getElementById('confidence-warning').classList.remove('flex');
+}
+
+/* =========================================================================
+   SUBMIT / DELETE
+   ========================================================================= */
+async function submitExpense() {
+  const date = document.getElementById('field-date').value;
+  const amount = Number(document.getElementById('field-amount').value);
+  const category = document.getElementById('field-category').value;
+  const shopName = document.getElementById('field-shop').value.trim();
+  const items = document.getElementById('field-items').value.trim();
+
+  if (!date) return showToast('결제일자를 입력해주세요', 'error');
+  if (!amount || amount <= 0) return showToast('결제금액을 입력해주세요', 'error');
+  if (!shopName) return showToast('사용처를 입력해주세요', 'error');
+
+  const expense = {
+    id: editingId || Date.now().toString(),
+    team: currentTeam,
+    date, amount, category, shopName, items,
+    tabName: document.getElementById('field-tab').value || null,
+    images: currentImages.map(img => ({ base64: img.base64, mimeType: img.mimeType }))
+  };
+
+  if (editingId) {
+    const idx = expenses.findIndex(e => e.id === editingId);
+    if (idx !== -1) expenses[idx] = expense;
+  } else {
+    expenses.push(expense);
+  }
+  saveExpenses();
+  renderDashboard();
+  showView('dashboard');
+  showToast('저장되었어요', 'success');
+
+  syncToSheet(expense); // fire and forget
+}
+
+function deleteExpense() {
+  if (!editingId) return;
+  if (!confirm('이 영수증을 삭제할까요?')) return;
+  expenses = expenses.filter(e => e.id !== editingId);
+  saveExpenses();
+  renderDashboard();
+  showView('dashboard');
+  showToast('삭제되었어요', 'success');
+}
+
+async function syncToSheet(expense) {
+  const sheetId = settings.sheetIds[expense.team];
+  if (!settings.webhookUrl) return showToast('Webhook URL이 설정되지 않아 로컬에만 저장됐어요', 'info');
+  if (!sheetId) return showToast(`${expense.team}의 시트 ID가 설정되지 않았어요`, 'info');
+
+  try {
+    const res = await fetch(settings.webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ sheetId, ...expense })
+    });
+    // Apps Script 웹훅은 내부 오류가 나도 HTTP 200을 그대로 돌려주므로,
+    // fetch 성공 여부가 아니라 응답 본문의 result 값을 직접 확인해야 실제 성공/실패를 알 수 있음.
+    let result = null;
+    try { result = await res.json(); } catch (parseErr) { /* 응답이 JSON이 아닌 경우 아래에서 처리 */ }
+
+    if (result && result.result === 'success') {
+      showToast('구글 시트에 동기화됐어요', 'success');
+    } else {
+      const detail = result && result.message ? `: ${result.message}` : '';
+      console.error('시트 동기화 실패 응답', result);
+      showToast(`시트 저장 실패${detail} (로컬 저장은 완료)`, 'error');
+    }
+  } catch (err) {
+    console.error(err);
+    showToast('시트 동기화에 실패했어요 (로컬 저장은 완료)', 'error');
+  }
+}
+
+/* =========================================================================
+   SETTINGS MODAL
+   ========================================================================= */
+// 관리자 PIN이 설정되어 있으면, PIN을 입력해야만 설정 화면을 열 수 있게 합니다.
+// PIN이 비어있으면(관리자가 아직 설정 전이면) 누구나 열 수 있습니다 — 최초 설정용.
+function checkAdminAccessAndOpen() {
+  if (!settings.adminPin) { openSettings(); return; }
+  if (sessionStorage.getItem(SS_ADMIN_UNLOCKED) === '1') { openSettings(); return; }
+  const input = prompt('관리자 PIN을 입력하세요');
+  if (input === null) return;
+  if (input === settings.adminPin) {
+    sessionStorage.setItem(SS_ADMIN_UNLOCKED, '1');
+    openSettings();
+  } else {
+    showToast('PIN이 올바르지 않아요', 'error');
+  }
+}
+
+function openSettings() {
+  document.getElementById('settings-api-key').value = settings.geminiApiKey || '';
+  document.getElementById('settings-webhook').value = settings.webhookUrl || '';
+  document.getElementById('settings-admin-pin').value = settings.adminPin || '';
+  const wrap = document.getElementById('settings-sheet-ids');
+  wrap.innerHTML = TEAMS.map(t => `
+    <div>
+      <label class="text-[11px] text-gray-400 mb-1 block">${t}</label>
+      <div class="flex gap-2">
+        <input data-team="${t}" type="text" placeholder="스프레드시트 ID" value="${settings.sheetIds[t] || ''}" class="sheet-id-input flex-[1.6] bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm">
+        <input data-team="${t}" type="text" placeholder="접속 코드(선택)" value="${settings.teamCodes[t] || ''}" class="team-code-input flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm">
+      </div>
+    </div>`).join('');
+  document.getElementById('modal-settings').classList.remove('hidden');
+}
+function closeSettings() { document.getElementById('modal-settings').classList.add('hidden'); }
+
+function saveSettingsForm() {
+  settings.geminiApiKey = document.getElementById('settings-api-key').value.trim();
+  settings.webhookUrl = document.getElementById('settings-webhook').value.trim();
+  settings.adminPin = document.getElementById('settings-admin-pin').value.trim();
+  document.querySelectorAll('.sheet-id-input').forEach(input => {
+    settings.sheetIds[input.dataset.team] = input.value.trim();
+  });
+  document.querySelectorAll('.team-code-input').forEach(input => {
+    settings.teamCodes[input.dataset.team] = input.value.trim();
+  });
+  saveSettings();
+  closeSettings();
+  showToast('설정이 저장됐어요 (이 기기에만 적용)', 'success');
+}
+
+// 지금 입력된 설정을 BAKED_SETTINGS 코드 블록으로 만들어 클립보드에 복사합니다.
+// 이 코드를 index.html 소스의 BAKED_SETTINGS 자리에 붙여넣고 커밋하면
+// 로컬 설정이 없는 모든 사람에게 이 값이 기본값으로 적용됩니다.
+function exportSettingsCode() {
+  const geminiApiKey = document.getElementById('settings-api-key').value.trim();
+  const webhookUrl = document.getElementById('settings-webhook').value.trim();
+  const adminPin = document.getElementById('settings-admin-pin').value.trim();
+  const sheetIds = {};
+  document.querySelectorAll('.sheet-id-input').forEach(input => {
+    sheetIds[input.dataset.team] = input.value.trim();
+  });
+  const teamCodes = {};
+  document.querySelectorAll('.team-code-input').forEach(input => {
+    teamCodes[input.dataset.team] = input.value.trim();
+  });
+  const code = `const BAKED_SETTINGS = {
+  geminiApiKey: ${JSON.stringify(geminiApiKey)},
+  webhookUrl: ${JSON.stringify(webhookUrl)},
+  sheetIds: ${JSON.stringify(sheetIds, null, 2).replace(/\n/g, '\n  ')},
+  teamCodes: ${JSON.stringify(teamCodes, null, 2).replace(/\n/g, '\n  ')},
+  adminPin: ${JSON.stringify(adminPin)}
+};`;
+  navigator.clipboard.writeText(code)
+    .then(() => showToast('코드가 복사됐어요. index.html에 붙여넣고 커밋하세요', 'success'))
+    .catch(() => showToast('복사에 실패했어요. 브라우저 권한을 확인해주세요', 'error'));
+}
+
+const APPS_SCRIPT_CODE = `/**
+ * 팀 예산 스캐너 - Google Apps Script Webhook
+ * 이 코드를 팀 스프레드시트의 [확장 프로그램 > Apps Script]에 붙여넣고
+ * [배포 > 새 배포 > 웹 앱]으로 배포하세요. (액세스 권한: 모든 사용자)
+ * 배포된 웹 앱 URL을 앱 설정의 Webhook URL에 입력하면 연동이 완료됩니다.
+ *
+ * 기록 위치: A5(날짜) / B5(사용처) / C5(사용내역) / D5(금액) / E5(사진1) / F5(사진2) / G5(사진3) 부터
+ * 시작해서, 해당 칸이 이미 차 있으면 자동으로 한 칸씩 아래로 내려가며 계속 쌓입니다.
+ *
+ * 사진은 구글 드라이브를 거치지 않고 insertImage()로 셀 위에 바로 삽입합니다.
+ * (드라이브 접근 권한이 전혀 필요 없어 권한 오류가 훨씬 적습니다.)
+ *
+ * 탭(시트) 선택: 기본은 날짜 기준 "26.9월" 자동 탭이지만, 앱에서 사용자가 별도 탭 이름
+ * (예: "26.9월(천안)")을 지정하면 그 탭을 그대로 찾거나 새로 만들어 기록합니다.
+ */
+
+var TEMPLATE_SHEET_NAME = '양식';               // 매월 시트 생성 시 복제할 기본 양식 탭 이름
+var START_ROW = 5;                              // 데이터가 시작되는 첫 번째 행
+var PHOTO_START_COL = 5;                        // 사진 1장째가 들어갈 열 (5=E열). 2장째는 F열, 3장째는 G열.
+var PHOTO_SIZE = 90;                            // 셀에 삽입되는 사진의 가로/세로 크기(px)
+
+function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var ss = SpreadsheetApp.openById(data.sheetId);
+    var sheet = getOrCreateMonthSheet(ss, data.date, data.tabName);
+
+    // images: [{base64, mimeType}, ...] 최대 3장. 구버전 클라이언트 호환을 위해 imageBase64도 지원.
+    var images = data.images && data.images.length ? data.images : (data.imageBase64 ? [{ base64: data.imageBase64, mimeType: data.imageType }] : []);
+
+    writeExpenseRow(sheet, data, images);
+    return jsonResponse({ result: 'success' });
+  } catch (err) {
+    console.error('doPost 실패: ' + err.message + ' | stack: ' + err.stack); // 실행 기록(시계 아이콘)에서 상세 로그로 확인 가능
+    return jsonResponse({ result: 'error', message: err.message });
+  }
+}
+
+// customTabName이 주어지면 그 이름의 탭을 그대로 찾거나 새로 만들고,
+// 없으면 날짜 기준 "26.9월" 형태의 월별 탭을 찾거나 만듭니다. 둘 다 없으면 '양식' 탭을 복제합니다.
+function getOrCreateMonthSheet(ss, dateStr, customTabName) {
+  var tabName = (customTabName && String(customTabName).trim()) ? String(customTabName).trim() : autoTabName(dateStr);
+  var sheet = ss.getSheetByName(tabName);
+  if (!sheet) {
+    var template = ss.getSheetByName(TEMPLATE_SHEET_NAME);
+    if (!template) throw new Error('양식 탭(' + TEMPLATE_SHEET_NAME + ')을 찾을 수 없습니다.');
+    sheet = template.copyTo(ss);
+    sheet.setName(tabName);
+    ss.setActiveSheet(sheet);
+    ss.moveActiveSheet(ss.getSheets().length);
+  }
+  return sheet;
+}
+
+function autoTabName(dateStr) {
+  var d = new Date(dateStr);
+  return (d.getFullYear() % 100) + '.' + (d.getMonth() + 1) + '월';
+}
+
+// 시트에 row번째 행이 아직 없으면 자동으로 행을 늘려줍니다 (범위 초과 오류 방지)
+function ensureRowExists(sheet, row) {
+  var maxRows = sheet.getMaxRows();
+  if (row > maxRows) {
+    sheet.insertRowsAfter(maxRows, row - maxRows);
+  }
+}
+
+// A열(날짜) 기준 START_ROW부터 아래로 내려가며 비어있는 첫 행을 찾아
+// 날짜|사용처|사용내역|금액|사진1(E)|사진2(F)|사진3(G) 순서로 기입합니다.
+// 칸이 차있으면 계속 다음 행으로 넘어갑니다.
+function writeExpenseRow(sheet, data, images) {
+  var row = START_ROW;
+  while (true) {
+    ensureRowExists(sheet, row);
+    var cell = sheet.getRange(row, 1).getValue();
+    if (cell === '' || cell === null) break;
+    row++;
+  }
+
+  // 열 순서: A=날짜 | B=사용처 | C=사용내역 | D=금액 | E/F/G=사진1/2/3
+  sheet.getRange(row, 1).setValue(data.date);
+  sheet.getRange(row, 2).setValue(data.shopName);
+  sheet.getRange(row, 3).setValue(data.items);
+  sheet.getRange(row, 4).setValue(data.amount);
+  for (var i = 0; i < images.length && i < 3; i++) {
+    insertImageToCell(sheet, images[i].base64, images[i].mimeType, row, PHOTO_START_COL + i);
+  }
+}
+
+// base64 영수증 이미지를 구글 드라이브 없이 곧바로 셀 위에 이미지로 삽입합니다.
+function insertImageToCell(sheet, base64, mimeType, row, col) {
+  var bytes = Utilities.base64Decode(base64);
+  var blob = Utilities.newBlob(bytes, mimeType || 'image/jpeg', 'receipt.jpg');
+  var image = sheet.insertImage(blob, col, row);
+  image.setWidth(PHOTO_SIZE).setHeight(PHOTO_SIZE);
+}
+
+function jsonResponse(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+`;
+
+function copyAppsScriptCode() {
+  navigator.clipboard.writeText(APPS_SCRIPT_CODE)
+    .then(() => showToast('Apps Script 코드가 복사됐어요', 'success'))
+    .catch(() => showToast('복사에 실패했어요. 브라우저 권한을 확인해주세요', 'error'));
+}
+
+/* =========================================================================
+   TOAST
+   ========================================================================= */
+let toastTimer = null;
+function showToast(message, type = 'info') {
+  const el = document.getElementById('toast');
+  const colors = { success: 'bg-gray-900', error: 'bg-red-600', info: 'bg-gray-900' };
+  el.className = `toast fixed z-50 bottom-24 left-1/2 -translate-x-1/2 text-white text-[13px] font-medium rounded-full px-4 py-2.5 shadow-lg whitespace-nowrap ${colors[type] || colors.info}`;
+  el.textContent = message;
+  el.classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add('hidden'), 2400);
+}
+
+/* =========================================================================
+   EVENT BINDINGS
+   ========================================================================= */
+function bindEvents() {
+  document.getElementById('btn-fab').addEventListener('click', () => openForm());
+  document.getElementById('btn-back').addEventListener('click', () => showView('dashboard'));
+  document.getElementById('btn-submit').addEventListener('click', submitExpense);
+  document.getElementById('btn-delete').addEventListener('click', deleteExpense);
+
+  document.getElementById('input-camera').addEventListener('change', e => { handleFilesSelected(e.target.files); e.target.value = ''; });
+  document.getElementById('input-gallery').addEventListener('change', e => { handleFilesSelected(e.target.files); e.target.value = ''; });
+  ['field-date', 'field-amount', 'field-shop'].forEach(elId => {
+    document.getElementById(elId).addEventListener('input', () => {
+      document.getElementById(elId).classList.remove('border-amber-400', 'bg-amber-50', 'ring-2', 'ring-amber-200');
+    });
+  });
+
+  document.getElementById('btn-settings').addEventListener('click', checkAdminAccessAndOpen);
+  document.getElementById('btn-close-settings').addEventListener('click', closeSettings);
+  document.getElementById('settings-backdrop-close').addEventListener('click', closeSettings);
+  document.getElementById('btn-save-settings').addEventListener('click', saveSettingsForm);
+  document.getElementById('btn-copy-script').addEventListener('click', copyAppsScriptCode);
+  document.getElementById('btn-export-settings').addEventListener('click', exportSettingsCode);
+  document.getElementById('btn-add-tab').addEventListener('click', addCustomTab);
+}
+
+init();
+</script>
+</body>
+</html>
+
+  input:focus, select:focus, textarea:focus { outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,0.15); border-color:#2563eb; }
+  input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(30%) sepia(70%) saturate(2000%) hue-rotate(210deg); }
+
+  .fab-shadow { box-shadow: 0 10px 25px -5px rgba(37,99,235,0.45), 0 8px 10px -6px rgba(37,99,235,0.35); }
+</style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+
+<div id="phone-frame">
+
+  <!-- ===================== HEADER ===================== -->
+  <header class="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-gray-100">
+    <div class="flex items-center justify-between px-4 h-16">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
+          <i class="ph-fill ph-receipt text-white text-lg"></i>
+        </div>
+        <div class="leading-tight">
+          <p class="text-[10px] font-medium text-gray-400 tracking-wide">TEAM BUDGET</p>
+          <h1 class="text-[15px] font-bold text-gray-900 -mt-0.5">팀 예산 스캐너</h1>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="relative">
+          <select id="team-select" class="appearance-none bg-gray-100 hover:bg-gray-200 transition text-sm font-semibold text-gray-800 rounded-full pl-3.5 pr-8 py-2 cursor-pointer"></select>
+          <i class="ph ph-caret-down text-xs text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+        </div>
+        <button id="btn-settings" class="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center">
+          <i class="ph ph-gear-six text-lg text-gray-600"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===================== 팀 접속 코드 잠금 화면 ===================== -->
   <div id="lock-screen" class="hidden fixed inset-0 z-40 bg-white flex flex-col items-center justify-center px-6 text-center">
     <button id="btn-lock-cancel" class="absolute top-5 right-5 w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
       <i class="ph ph-x text-lg text-gray-500"></i>
