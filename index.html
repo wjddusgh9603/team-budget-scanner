@@ -940,12 +940,23 @@ async function syncToSheet(expense) {
   if (!sheetId) return showToast(`${expense.team}의 시트 ID가 설정되지 않았어요`, 'info');
 
   try {
-    await fetch(settings.webhookUrl, {
+    const res = await fetch(settings.webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ sheetId, ...expense })
     });
-    showToast('구글 시트에 동기화됐어요', 'success');
+    // Apps Script 웹훅은 내부 오류가 나도 HTTP 200을 그대로 돌려주므로,
+    // fetch 성공 여부가 아니라 응답 본문의 result 값을 직접 확인해야 실제 성공/실패를 알 수 있음.
+    let result = null;
+    try { result = await res.json(); } catch (parseErr) { /* 응답이 JSON이 아닌 경우 아래에서 처리 */ }
+
+    if (result && result.result === 'success') {
+      showToast('구글 시트에 동기화됐어요', 'success');
+    } else {
+      const detail = result && result.message ? `: ${result.message}` : '';
+      console.error('시트 동기화 실패 응답', result);
+      showToast(`시트 저장 실패${detail} (로컬 저장은 완료)`, 'error');
+    }
   } catch (err) {
     console.error(err);
     showToast('시트 동기화에 실패했어요 (로컬 저장은 완료)', 'error');
@@ -1063,6 +1074,7 @@ function doPost(e) {
     writeExpenseRow(sheet, data, imageUrls);
     return jsonResponse({ result: 'success' });
   } catch (err) {
+    console.error('doPost 실패: ' + err.message + ' | stack: ' + err.stack); // 실행 기록(시계 아이콘)에서 상세 로그로 확인 가능
     return jsonResponse({ result: 'error', message: err.message });
   }
 }
