@@ -62,6 +62,9 @@
           <select id="team-select" class="appearance-none bg-gray-100 hover:bg-gray-200 transition text-sm font-semibold text-gray-800 rounded-full pl-3.5 pr-8 py-2 cursor-pointer"></select>
           <i class="ph ph-caret-down text-xs text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
         </div>
+        <button id="btn-lock-team" class="hidden w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition items-center justify-center" title="현재 팀 잠그기">
+          <i class="ph ph-lock-simple text-lg text-gray-600"></i>
+        </button>
         <button id="btn-settings" class="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center">
           <i class="ph ph-gear-six text-lg text-gray-600"></i>
         </button>
@@ -348,6 +351,7 @@ function saveExpenses() { localStorage.setItem(LS_EXPENSES, JSON.stringify(expen
 function init() {
   refreshTeamSelect();
   document.getElementById('team-select').addEventListener('change', e => selectTeam(e.target.value));
+  document.getElementById('btn-lock-team').addEventListener('click', lockCurrentTeam);
 
   // 잠금 화면
   document.getElementById('lock-team-select').addEventListener('change', e => {
@@ -394,6 +398,25 @@ function markTeamUnlocked(teamName) {
     localStorage.setItem(LS_UNLOCKED_TEAMS, JSON.stringify(list));
   }
 }
+function unmarkTeamUnlocked(teamName) {
+  const list = loadUnlockedTeams().filter(t => t !== teamName);
+  localStorage.setItem(LS_UNLOCKED_TEAMS, JSON.stringify(list));
+}
+
+// 헤더의 🔒 버튼: 코드가 걸려있는 팀일 때만 보여주고, 누르면 이 기기에서의 잠금 해제 상태를 지웁니다.
+// 이후 그 팀을 다시 선택하려면 코드를 새로 입력해야 합니다 (다른 사람에게 넘기기 전 "로그아웃" 용도).
+function updateLockButtonVisibility() {
+  const btn = document.getElementById('btn-lock-team');
+  const show = !!getTeamCode(currentTeam);
+  btn.classList.toggle('hidden', !show);
+  btn.classList.toggle('flex', show);
+}
+function lockCurrentTeam() {
+  if (!getTeamCode(currentTeam)) return;
+  unmarkTeamUnlocked(currentTeam);
+  showToast(`${currentTeam} 팀을 잠갔어요`, 'success');
+  showLockScreen(currentTeam);
+}
 
 // 팀을 선택 시도합니다. 잠겨있으면 대시보드 대신 잠금 화면을 보여줍니다.
 function selectTeam(teamName) {
@@ -401,6 +424,7 @@ function selectTeam(teamName) {
     currentTeam = teamName;
     localStorage.setItem(LS_TEAM, currentTeam);
     refreshTeamSelect();
+    updateLockButtonVisibility();
     hideLockScreen();
     renderDashboard();
   } else {
@@ -730,7 +754,7 @@ async function loadImageSource(file) {
 }
 
 function compressImage(source) {
-  const MAX = 1600; // 글자 인식 정확도를 위해 기존보다 여유있게 확보
+  const MAX = 2000; // 글자 인식 정확도를 위해 상향 (AI 스캔 전용 고화질 — 업로드용은 별도로 작게 만듦)
   let width = source.width, height = source.height;
   if (width > MAX || height > MAX) {
     const scale = MAX / Math.max(width, height);
@@ -747,42 +771,35 @@ function compressImage(source) {
   const dataUrl = canvas.toDataURL(outType, 0.92);
   const base64 = dataUrl.split(',')[1];
 
-  // 구글 시트 셀 삽입용 축소 썸네일. Google Sheets의 insertImage는 최대 100만 픽셀 / 2MB
-  // 제한이 있어서, AI 인식용 원본(base64)과는 별도로 훨씬 작은 사본을 하나 더 만들어둡니다.
-  const THUMB_MAX = 700; // 700x700 이하 = 최대 49만 픽셀로 안전하게 제한선 아래
-  let tWidth = width, tHeight = height;
-  if (tWidth > THUMB_MAX || tHeight > THUMB_MAX) {
-    const tScale = THUMB_MAX / Math.max(tWidth, tHeight);
-    tWidth = Math.round(tWidth * tScale);
-    tHeight = Math.round(tHeight * tScale);
-  }
-  const thumbCanvas = document.createElement('canvas');
-  thumbCanvas.width = tWidth; thumbCanvas.height = tHeight;
-  thumbCanvas.getContext('2d').drawImage(canvas, 0, 0, tWidth, tHeight);
-  const sheetBase64 = thumbCanvas.toDataURL(outType, 0.8).split(',')[1];
-
   if (source.close) source.close(); // ImageBitmap 메모리 해제
-  return { base64, mimeType: outType, dataUrl, sheetBase64 };
+  return { base64, mimeType: outType, dataUrl };
 }
 
-// 자동 명암 보정: 어둡거나 흐릿하게 찍힌 영수증의 밝기 대비를 넓혀 글자를 더 또렷하게 만듭니다.
-// (히스토그램 스트레칭 — 별도 라이브러리 없이 캔버스만으로 처리)
+// 자동 명암 보정: 상하위 1%의 극단값(반사광·그림자 얼룩 등)은 무시하고 나머지 구간만 늘려서
+// 글자를 또렷하게 만듭니다 (퍼센타일 기반 히스토그램 스트레칭 — 단순 min/max보다 훨씬 안정적).
 function autoEnhance(ctx, width, height) {
   try {
     const imageData = ctx.getImageData(0, 0, width, height);
     const data = imageData.data;
-    let min = 255, max = 0;
+    const histogram = new Array(256).fill(0);
+    let sampleCount = 0;
     for (let i = 0; i < data.length; i += 16) { // 성능을 위해 일부 픽셀만 샘플링
-      const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-      if (lum < min) min = lum;
-      if (lum > max) max = lum;
+      const lum = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+      histogram[lum]++;
+      sampleCount++;
     }
-    const range = max - min;
+    const lowCut = sampleCount * 0.01, highCut = sampleCount * 0.99;
+    let acc = 0, low = 0, high = 255;
+    for (let v = 0; v < 256; v++) { acc += histogram[v]; if (acc >= lowCut) { low = v; break; } }
+    acc = 0;
+    for (let v = 255; v >= 0; v--) { acc += histogram[v]; if (acc >= sampleCount - highCut) { high = v; break; } }
+
+    const range = high - low;
     if (range < 20) return; // 이미 대비가 충분하면 그대로 둠
     for (let i = 0; i < data.length; i += 4) {
-      data[i] = clamp255(((data[i] - min) / range) * 255);
-      data[i + 1] = clamp255(((data[i + 1] - min) / range) * 255);
-      data[i + 2] = clamp255(((data[i + 2] - min) / range) * 255);
+      data[i] = clamp255(((data[i] - low) / range) * 255);
+      data[i + 1] = clamp255(((data[i + 1] - low) / range) * 255);
+      data[i + 2] = clamp255(((data[i + 2] - low) / range) * 255);
     }
     ctx.putImageData(imageData, 0, 0);
   } catch (e) {
@@ -791,28 +808,22 @@ function autoEnhance(ctx, width, height) {
 }
 function clamp255(v) { return Math.max(0, Math.min(255, v)); }
 
-// 구글 시트에 insertImage()로 삽입할 전용 축소 썸네일을 만듭니다.
-// Apps Script insertImage()는 최대 2MB / 최대 100만 픽셀 제한이 있어,
-// AI 스캔용 고화질 원본과 별도로 훨씬 작은 버전을 새로 만들어 보냅니다.
+// 구글 시트/드라이브 업로드 전용 축소 썸네일을 만듭니다.
+// AI 스캔에는 위의 고화질(최대 2000px) 원본을 그대로 쓰고, 실제 서버로 전송/저장되는
+// 사진만 훨씬 작게(최대 640px, 저용량 압축) 별도로 만들어 업로드 용량을 최소화합니다.
 function makeSheetThumbnail(dataUrl) {
-  const MAX_DIM = 700;
-  const MAX_PIXELS = 900000; // 100만 픽셀 한도 대비 여유를 둠
+  const MAX_DIM = 640;
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
       let width = img.width, height = img.height;
-      const dimScale = Math.min(1, MAX_DIM / Math.max(width, height));
-      width = Math.round(width * dimScale);
-      height = Math.round(height * dimScale);
-      if (width * height > MAX_PIXELS) {
-        const pixelScale = Math.sqrt(MAX_PIXELS / (width * height));
-        width = Math.max(1, Math.round(width * pixelScale));
-        height = Math.max(1, Math.round(height * pixelScale));
-      }
+      const scale = Math.min(1, MAX_DIM / Math.max(width, height));
+      width = Math.max(1, Math.round(width * scale));
+      height = Math.max(1, Math.round(height * scale));
       const canvas = document.createElement('canvas');
       canvas.width = width; canvas.height = height;
       canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL('image/jpeg', 0.75).split(',')[1]);
+      resolve(canvas.toDataURL('image/jpeg', 0.65).split(',')[1]);
     };
     img.onerror = () => reject(new Error('썸네일 생성 실패'));
     img.src = dataUrl;
@@ -834,6 +845,17 @@ async function scanReceipt(images) {
         console.warn('1차 스캔 실패, 더 정밀한 모델로 재시도합니다', firstErr);
         data = await callGeminiApi(images, 'gemini-pro-latest'); // 실패 시 더 강력한 모델로 1회 재시도
       }
+      // 실패는 아니었지만 특정 항목의 확신도가 낮으면, 더 정밀한 모델로 한 번 더 읽혀서 비교해본다.
+      const lowConfidence = data.confidence && Object.values(data.confidence).some(v => v === 'low');
+      if (lowConfidence) {
+        try {
+          console.warn('확신도 낮은 항목 발견, 정밀 모델로 재검증합니다');
+          const better = await callGeminiApi(images, 'gemini-pro-latest');
+          data = better; // 정밀 모델 결과를 우선 사용
+        } catch (escalateErr) {
+          console.warn('정밀 모델 재검증 실패, 1차 결과를 그대로 사용합니다', escalateErr);
+        }
+      }
     } else {
       data = await simulateScan();
     }
@@ -851,6 +873,7 @@ async function scanReceipt(images) {
 async function callGeminiApi(images, modelId) {
   const prompt = `너는 한국 영수증 전문 OCR 어시스턴트야. 아래 영수증 이미지(1~3장, 같은 영수증의 여러 부분/사본일 수 있음)를 최대한 정확히 읽어서 반드시 아래 JSON 형식으로만 응답해. 코드블록(\`\`\`)이나 설명 문장은 절대 포함하지 마.
 {
+  "rawText": "영수증에서 보이는 글자를 위에서 아래 순서로 최대한 그대로(줄바꿈은 \\n) 옮겨 적은 텍스트",
   "date": "YYYY-MM-DD",
   "amount": 숫자(콤마/원 기호 없이 정수),
   "shopName": "상호명",
@@ -859,10 +882,11 @@ async function callGeminiApi(images, modelId) {
   "confidence": { "date": "high 또는 low", "amount": "high 또는 low", "shopName": "high 또는 low" }
 }
 규칙:
+- rawText를 먼저 최대한 꼼꼼히 옮겨 적은 뒤, 그 내용을 근거로 나머지 필드를 채워. 추측하지 말고 rawText에 실제로 보이는 글자만 근거로 삼아.
 - amount는 영수증의 "합계/총액/받을금액" 중 최종 결제 금액을 사용해.
 - 날짜를 찾을 수 없으면 오늘 날짜(${new Date().toISOString().slice(0,10)})를 사용해.
 - category는 반드시 제시된 6개 값 중 하나여야 해.
-- 이미지가 흐리거나 일부만 보여도, 보이는 글자를 최대한 근거로 최선의 추정값을 채워줘.
+- 이미지가 흐리거나 일부만 보여도, rawText에서 보이는 글자를 최대한 근거로 최선의 추정값을 채워줘.
 - 여러 장이 주어지면 서로 보완해서 읽고, 그래도 자신 없는 값은 confidence를 "low"로 표시해.`;
 
   const imageParts = images.map(img => ({ inline_data: { mime_type: img.mimeType, data: img.base64 } }));
@@ -873,7 +897,7 @@ async function callGeminiApi(images, modelId) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }, ...imageParts] }],
-      generationConfig: { response_mime_type: 'application/json', temperature: 0.1 }
+      generationConfig: { response_mime_type: 'application/json', temperature: 0 }
     })
   });
   if (!res.ok) {
@@ -959,7 +983,7 @@ async function submitExpense() {
     team: currentTeam,
     date, amount, category, shopName, items,
     tabName: document.getElementById('field-tab').value || null,
-    images: currentImages.map(img => ({ base64: img.sheetBase64 || img.base64, mimeType: img.mimeType }))
+    images: currentImages.map(img => ({ base64: img.base64, mimeType: img.mimeType }))
   };
 
   if (editingId) {
@@ -992,8 +1016,8 @@ async function syncToSheet(expense) {
   if (!sheetId) return showToast(`${expense.team}의 시트 ID가 설정되지 않았어요`, 'info');
 
   try {
-    // 스캔용 고화질 이미지를 그대로 보내면 Apps Script insertImage()의 용량 제한
-    // (최대 2MB, 최대 100만 픽셀)을 넘을 수 있어, 시트 전송용으로 별도로 축소한 썸네일을 만든다.
+    // AI 스캔용 고화질 원본을 그대로 올리면 업로드 용량이 커지므로, 서버 전송용으로
+    // 별도로 축소한 작은 썸네일을 새로 만들어서 보낸다 (드라이브 저장 용량도 절약됨).
     const thumbImages = await Promise.all((expense.images || []).map(async img => ({
       base64: await makeSheetThumbnail(`data:${img.mimeType};base64,${img.base64}`),
       mimeType: 'image/jpeg'
@@ -1108,17 +1132,18 @@ const APPS_SCRIPT_CODE = `/**
  * 기록 위치: A5(날짜) / B5(사용처) / C5(사용내역) / D5(금액) / E5(사진1) / F5(사진2) / G5(사진3) 부터
  * 시작해서, 해당 칸이 이미 차 있으면 자동으로 한 칸씩 아래로 내려가며 계속 쌓입니다.
  *
- * 사진은 구글 드라이브를 거치지 않고 insertImage()로 셀 위에 바로 삽입합니다.
- * (드라이브 접근 권한이 전혀 필요 없어 권한 오류가 훨씬 적습니다.)
+ * 사진은 구글 드라이브에 업로드한 뒤, 시트 메뉴의 "선택한 셀에 이미지 배치"와 동일한
+ * 방식(CellImage)으로 셀 값 자체에 삽입합니다. 이 방식은 이미지가 셀 크기에 맞춰 늘어나고
+ * 행 삽입/정렬 시 셀과 함께 움직입니다. (Drive 접근 권한 승인이 필요합니다.)
  *
  * 탭(시트) 선택: 기본은 날짜 기준 "26.9월" 자동 탭이지만, 앱에서 사용자가 별도 탭 이름
  * (예: "26.9월(천안)")을 지정하면 그 탭을 그대로 찾거나 새로 만들어 기록합니다.
  */
 
 var TEMPLATE_SHEET_NAME = '양식';               // 매월 시트 생성 시 복제할 기본 양식 탭 이름
+var DRIVE_FOLDER_NAME = '팀예산스캐너_영수증';   // 영수증 이미지가 저장될 구글 드라이브 폴더 이름
 var START_ROW = 5;                              // 데이터가 시작되는 첫 번째 행
 var PHOTO_START_COL = 5;                        // 사진 1장째가 들어갈 열 (5=E열). 2장째는 F열, 3장째는 G열.
-var PHOTO_SIZE = 90;                            // 셀에 삽입되는 사진의 가로/세로 크기(px)
 
 function doPost(e) {
   try {
@@ -1128,8 +1153,12 @@ function doPost(e) {
 
     // images: [{base64, mimeType}, ...] 최대 3장. 구버전 클라이언트 호환을 위해 imageBase64도 지원.
     var images = data.images && data.images.length ? data.images : (data.imageBase64 ? [{ base64: data.imageBase64, mimeType: data.imageType }] : []);
+    var imageUrls = [];
+    for (var i = 0; i < images.length && i < 3; i++) {
+      imageUrls.push(uploadImageToDrive(images[i].base64, images[i].mimeType, data.shopName, data.date, i));
+    }
 
-    writeExpenseRow(sheet, data, images);
+    writeExpenseRow(sheet, data, imageUrls);
     return jsonResponse({ result: 'success' });
   } catch (err) {
     console.error('doPost 실패: ' + err.message + ' | stack: ' + err.stack); // 실행 기록(시계 아이콘)에서 상세 로그로 확인 가능
@@ -1169,7 +1198,7 @@ function ensureRowExists(sheet, row) {
 // A열(날짜) 기준 START_ROW부터 아래로 내려가며 비어있는 첫 행을 찾아
 // 날짜|사용처|사용내역|금액|사진1(E)|사진2(F)|사진3(G) 순서로 기입합니다.
 // 칸이 차있으면 계속 다음 행으로 넘어갑니다.
-function writeExpenseRow(sheet, data, images) {
+function writeExpenseRow(sheet, data, imageUrls) {
   var row = START_ROW;
   while (true) {
     ensureRowExists(sheet, row);
@@ -1183,17 +1212,34 @@ function writeExpenseRow(sheet, data, images) {
   sheet.getRange(row, 2).setValue(data.shopName);
   sheet.getRange(row, 3).setValue(data.items);
   sheet.getRange(row, 4).setValue(data.amount);
-  for (var i = 0; i < images.length && i < 3; i++) {
-    insertImageToCell(sheet, images[i].base64, images[i].mimeType, row, PHOTO_START_COL + i);
+  for (var i = 0; i < imageUrls.length && i < 3; i++) {
+    if (imageUrls[i]) placeImageInCell(sheet, row, PHOTO_START_COL + i, imageUrls[i]);
   }
 }
 
-// base64 영수증 이미지를 구글 드라이브 없이 곧바로 셀 위에 이미지로 삽입합니다.
-function insertImageToCell(sheet, base64, mimeType, row, col) {
+// 구글 시트의 "선택한 셀에 이미지 배치"와 동일한 방식(CellImage)으로 셀 값 자체에 이미지를 넣습니다.
+function placeImageInCell(sheet, row, col, url) {
+  var cellImage = SpreadsheetApp.newCellImage().setSourceUrl(url).build();
+  sheet.getRange(row, col).setValue(cellImage);
+}
+
+// base64 영수증 이미지를 구글 드라이브에 업로드하고, 이미지 URL을 반환합니다 (최대 3장까지 지원)
+function uploadImageToDrive(base64, mimeType, shopName, dateStr, index) {
+  var folder = getOrCreateFolder(DRIVE_FOLDER_NAME);
+  var ext = (mimeType && mimeType.indexOf('png') !== -1) ? 'png' : 'jpg';
+  var suffix = index ? '_' + (index + 1) : '';
+  var fileName = dateStr + '_' + (shopName || '영수증') + suffix + '.' + ext;
   var bytes = Utilities.base64Decode(base64);
-  var blob = Utilities.newBlob(bytes, mimeType || 'image/jpeg', 'receipt.jpg');
-  var image = sheet.insertImage(blob, col, row);
-  image.setWidth(PHOTO_SIZE).setHeight(PHOTO_SIZE);
+  var blob = Utilities.newBlob(bytes, mimeType || 'image/jpeg', fileName);
+  var file = folder.createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w1000';
+}
+
+function getOrCreateFolder(name) {
+  var folders = DriveApp.getFoldersByName(name);
+  if (folders.hasNext()) return folders.next();
+  return DriveApp.createFolder(name);
 }
 
 function jsonResponse(obj) {
