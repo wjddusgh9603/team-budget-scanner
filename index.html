@@ -754,7 +754,7 @@ async function loadImageSource(file) {
 }
 
 function compressImage(source) {
-  const MAX = 2000; // 글자 인식 정확도를 위해 상향 (AI 스캔 전용 고화질 — 업로드용은 별도로 작게 만듦)
+  const MAX = 1500; // 정확도와 속도의 균형점 (2000px는 더 정확했지만 전송/처리 시간이 눈에 띄게 길었음)
   let width = source.width, height = source.height;
   if (width > MAX || height > MAX) {
     const scale = MAX / Math.max(width, height);
@@ -768,7 +768,7 @@ function compressImage(source) {
   autoEnhance(ctx, width, height);
 
   const outType = 'image/jpeg';
-  const dataUrl = canvas.toDataURL(outType, 0.92);
+  const dataUrl = canvas.toDataURL(outType, 0.85);
   const base64 = dataUrl.split(',')[1];
 
   if (source.close) source.close(); // ImageBitmap 메모리 해제
@@ -845,11 +845,11 @@ async function scanReceipt(images) {
         console.warn('1차 스캔 실패, 더 정밀한 모델로 재시도합니다', firstErr);
         data = await callGeminiApi(images, 'gemini-pro-latest'); // 실패 시 더 강력한 모델로 1회 재시도
       }
-      // 실패는 아니었지만 특정 항목의 확신도가 낮으면, 더 정밀한 모델로 한 번 더 읽혀서 비교해본다.
-      const lowConfidence = data.confidence && Object.values(data.confidence).some(v => v === 'low');
-      if (lowConfidence) {
+      // 실패는 아니었지만 "금액"의 확신도가 낮으면(가장 치명적인 항목), 더 정밀한 모델로 한 번 더 검증한다.
+      // 날짜/상호명만 낮은 경우는 재호출 없이 화면에서 노란색으로 표시만 해 속도를 지킨다.
+      if (data.confidence && data.confidence.amount === 'low') {
         try {
-          console.warn('확신도 낮은 항목 발견, 정밀 모델로 재검증합니다');
+          console.warn('금액 확신도 낮음, 정밀 모델로 재검증합니다');
           const better = await callGeminiApi(images, 'gemini-pro-latest');
           data = better; // 정밀 모델 결과를 우선 사용
         } catch (escalateErr) {
@@ -873,7 +873,7 @@ async function scanReceipt(images) {
 async function callGeminiApi(images, modelId) {
   const prompt = `너는 한국 영수증 전문 OCR 어시스턴트야. 아래 영수증 이미지(1~3장, 같은 영수증의 여러 부분/사본일 수 있음)를 최대한 정확히 읽어서 반드시 아래 JSON 형식으로만 응답해. 코드블록(\`\`\`)이나 설명 문장은 절대 포함하지 마.
 {
-  "rawText": "영수증에서 보이는 글자를 위에서 아래 순서로 최대한 그대로(줄바꿈은 \\n) 옮겨 적은 텍스트",
+  "keyLines": "날짜가 적힌 줄, 상호명이 적힌 줄, 합계/총액 금액이 적힌 줄 — 이 3줄만 영수증에 보이는 그대로 옮겨 적기(줄바꿈은 \\n)",
   "date": "YYYY-MM-DD",
   "amount": 숫자(콤마/원 기호 없이 정수),
   "shopName": "상호명",
@@ -882,12 +882,11 @@ async function callGeminiApi(images, modelId) {
   "confidence": { "date": "high 또는 low", "amount": "high 또는 low", "shopName": "high 또는 low" }
 }
 규칙:
-- rawText를 먼저 최대한 꼼꼼히 옮겨 적은 뒤, 그 내용을 근거로 나머지 필드를 채워. 추측하지 말고 rawText에 실제로 보이는 글자만 근거로 삼아.
+- keyLines를 먼저 적은 뒤, 그 내용을 근거로 나머지 필드를 채워. 추측하지 말고 실제로 보이는 글자만 근거로 삼아.
 - amount는 영수증의 "합계/총액/받을금액" 중 최종 결제 금액을 사용해.
 - 날짜를 찾을 수 없으면 오늘 날짜(${new Date().toISOString().slice(0,10)})를 사용해.
 - category는 반드시 제시된 6개 값 중 하나여야 해.
-- 이미지가 흐리거나 일부만 보여도, rawText에서 보이는 글자를 최대한 근거로 최선의 추정값을 채워줘.
-- 여러 장이 주어지면 서로 보완해서 읽고, 그래도 자신 없는 값은 confidence를 "low"로 표시해.`;
+- 이미지가 흐리거나 일부만 보여도 최선의 추정값을 채워줘. 여러 장이 주어지면 서로 보완해서 읽고, 그래도 자신 없는 값은 confidence를 "low"로 표시해.`;
 
   const imageParts = images.map(img => ({ inline_data: { mime_type: img.mimeType, data: img.base64 } }));
 
