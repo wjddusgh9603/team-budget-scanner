@@ -14,12 +14,12 @@
 <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap" rel="stylesheet" onerror="this.remove()">
 
 <style>
-  html, body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif; }
+  html, body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif; overflow-x: hidden; width: 100%; max-width: 100vw; }
   * { -webkit-tap-highlight-color: transparent; }
   ::-webkit-scrollbar { display: none; }
   body { -ms-overflow-style: none; scrollbar-width: none; background:#f8fafc; }
 
-  #phone-frame { max-width: 480px; margin: 0 auto; min-height: 100vh; background:#f8fafc; position:relative; box-shadow: 0 0 40px rgba(0,0,0,0.06); }
+  #phone-frame { max-width: 480px; margin: 0 auto; min-height: 100vh; background:#f8fafc; position:relative; box-shadow: 0 0 40px rgba(0,0,0,0.06); overflow-x: hidden; }
 
   .view { animation: fadeSlide .22s ease both; }
   @keyframes fadeSlide { from { opacity:0; transform: translateY(6px);} to {opacity:1; transform:none;} }
@@ -187,7 +187,7 @@
       <div>
         <label class="text-xs font-semibold text-gray-500 mb-1.5 block">결제금액</label>
         <div class="relative">
-          <input id="field-amount" type="number" inputmode="numeric" placeholder="0" class="w-full bg-white border border-gray-200 rounded-xl pl-3.5 pr-10 py-3 text-sm font-medium text-gray-800 transition-colors">
+          <input id="field-amount" type="text" inputmode="numeric" placeholder="0" class="w-full bg-white border border-gray-200 rounded-xl pl-3.5 pr-10 py-3 text-sm font-medium text-gray-800 transition-colors">
           <span class="absolute right-3.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">원</span>
         </div>
       </div>
@@ -275,7 +275,7 @@
   </div>
 
   <!-- Toast -->
-  <div id="toast" class="toast hidden fixed z-50 bottom-24 bg-gray-900 text-white text-[13px] font-medium rounded-full px-4 py-2.5 shadow-lg whitespace-nowrap" style="left:50%; transform:translateX(-50%);"></div>
+  <div id="toast" class="toast hidden fixed z-50 bottom-24 bg-gray-900 text-white text-[13px] font-medium rounded-full px-4 py-2.5 shadow-lg whitespace-nowrap" style="left:50%; transform:translateX(-50%); pointer-events:none;"></div>
 
 </div>
 
@@ -298,23 +298,11 @@ const CATEGORY_META = {
 // 어떤 브라우저/기기로 접속하든(로컬 설정이 없는 사람은) 이 값이 자동으로 적용됩니다.
 // adminPin을 설정해두면, 설정 화면은 이 PIN을 아는 관리자만 열 수 있습니다.
 const BAKED_SETTINGS = {
-  geminiApiKey: "AQ.Ab8RN6IyzNyNFXiBNE14bqIRNx0OMXVEhHAnlnsOTA65r-KYWw",
-  webhookUrl: "https://script.google.com/macros/s/AKfycby1rvRR5pde72L-2vZgmEIyOz173qBteyvGN2SfEic63mGDQT0Sdf7Btx2HvABcR5Tf/exec",
-  sheetIds: {
-    "U18": "11JBpYa_tsuVsNMcDMnfSeFXvxg6lX29Zlth5QbtRI44",
-    "U15": "10LXsOCBmSUF5Oky0B3LmacN1Uo5zMJC_Le7d2n6RPpM",
-    "U12": "1SwxVR8_3s089FOnFcv2m_EJryhLFTMe5ifrkTCHK0PM",
-    "U18 치료실": "1iCQgiMrstUwniU9VmwOZTibOtwauWqd57yJDcCPkw3E",
-    "U15 치료실": "1tCm1XuNxWI-8oMDQR-Ak1Jt42MsScM5KV-CqYTyctfc"
-  },
-  teamCodes: {
-    "U18": "1111",
-    "U15": "2222",
-    "U12": "3333",
-    "U18 치료실": "4444",
-    "U15 치료실": "5555"
-  },
-  adminPin: "1234"
+  geminiApiKey: '',
+  webhookUrl: '',
+  sheetIds: { 'U18': '', 'U15': '', 'U12': '', 'U18 치료실': '', 'U15 치료실': '' },
+  teamCodes: { 'U18': '', 'U15': '', 'U12': '', 'U18 치료실': '', 'U15 치료실': '' }, // 팀별 접속 코드(선택). 비워두면 제한 없음.
+  adminPin: ''
 };
 const LS_SETTINGS = 'tbs_settings';
 const LS_EXPENSES = 'tbs_expenses';
@@ -496,7 +484,7 @@ function openForm(expense = null) {
   document.getElementById('btn-delete').classList.toggle('hidden', !expense);
   document.getElementById('btn-delete').classList.toggle('flex', !!expense);
   document.getElementById('field-date').value = expense ? expense.date : new Date().toISOString().slice(0, 10);
-  document.getElementById('field-amount').value = expense ? expense.amount : '';
+  document.getElementById('field-amount').value = expense ? formatNumberWithCommas(expense.amount) : '';
   document.getElementById('field-category').value = expense ? expense.category : CATEGORIES[0];
   document.getElementById('field-shop').value = expense ? expense.shopName : '';
   document.getElementById('field-items').value = expense ? expense.items : '';
@@ -702,6 +690,13 @@ function renderRecentList(teamExpenses) {
       if (exp) openForm(exp);
     });
   });
+}
+
+// 결제금액 입력칸에 천 단위 콤마를 붙여줍니다 (예: 12000 → 12,000). 숫자가 아닌 문자는 제거합니다.
+function formatNumberWithCommas(value) {
+  const digits = String(value == null ? '' : value).replace(/[^\d]/g, '');
+  if (!digits) return '';
+  return Number(digits).toLocaleString('ko-KR');
 }
 
 function escapeHtml(str) {
@@ -937,7 +932,7 @@ function simulateScan() {
 const CONFIDENCE_FIELD_MAP = { date: 'field-date', amount: 'field-amount', shopName: 'field-shop' };
 function fillFormFromScan(data) {
   if (data.date) document.getElementById('field-date').value = data.date;
-  if (data.amount != null) document.getElementById('field-amount').value = data.amount;
+  if (data.amount != null) document.getElementById('field-amount').value = formatNumberWithCommas(data.amount);
   if (data.shopName) document.getElementById('field-shop').value = data.shopName;
   if (data.items) document.getElementById('field-items').value = data.items;
   if (data.category && CATEGORIES.includes(data.category)) document.getElementById('field-category').value = data.category;
@@ -980,7 +975,7 @@ function clearConfidenceHighlights() {
    ========================================================================= */
 async function submitExpense() {
   const date = document.getElementById('field-date').value;
-  const amount = Number(document.getElementById('field-amount').value);
+  const amount = Number(document.getElementById('field-amount').value.replace(/,/g, ''));
   const category = document.getElementById('field-category').value;
   const shopName = document.getElementById('field-shop').value.trim();
   const items = document.getElementById('field-items').value.trim();
@@ -1293,6 +1288,12 @@ function bindEvents() {
     document.getElementById(elId).addEventListener('input', () => {
       document.getElementById(elId).classList.remove('border-amber-400', 'bg-amber-50', 'ring-2', 'ring-amber-200');
     });
+  });
+  document.getElementById('field-amount').addEventListener('input', (e) => {
+    const cursorFromEnd = e.target.value.length - e.target.selectionStart; // 커서 위치를 "끝에서부터 거리" 기준으로 유지
+    e.target.value = formatNumberWithCommas(e.target.value);
+    const pos = Math.max(0, e.target.value.length - cursorFromEnd);
+    e.target.setSelectionRange(pos, pos);
   });
 
   document.getElementById('btn-settings').addEventListener('click', checkAdminAccessAndOpen);
