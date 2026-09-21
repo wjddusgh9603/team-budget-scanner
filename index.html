@@ -219,6 +219,7 @@
     <div class="spinner"></div>
     <p class="text-white text-sm font-semibold">AI가 영수증을 분석하고 있어요…</p>
     <p class="text-blue-200 text-xs">날짜·금액·상호명을 자동으로 읽는 중</p>
+    <button id="btn-scan-cancel" type="button" class="mt-3 text-xs text-gray-300 underline">오래 걸리면 취소하고 직접 입력하기</button>
   </div>
 
   <!-- FAB -->
@@ -330,6 +331,7 @@ let settings = loadSettings();
 let expenses = loadExpenses();
 let currentTeam = localStorage.getItem(LS_TEAM) || TEAMS[0];
 let currentImages = [];       // [{ base64, mimeType, dataUrl }, ...] 최대 3장
+let scanCancelled = false;    // "취소" 버튼으로 스캔을 중단했는지 (뒤늦게 응답이 와도 무시하기 위함)
 let editingId = null;
 let chartInstance = null;
 
@@ -853,6 +855,7 @@ function makeSheetThumbnail(dataUrl) {
    GEMINI API SCAN
    ========================================================================= */
 async function scanReceipt(images) {
+  scanCancelled = false;
   document.getElementById('scan-overlay').classList.remove('hidden');
   document.getElementById('scan-overlay').classList.add('flex');
   try {
@@ -866,7 +869,7 @@ async function scanReceipt(images) {
       }
       // 실패는 아니었지만 "금액"의 확신도가 낮으면(가장 치명적인 항목), 더 정밀한 모델로 한 번 더 검증한다.
       // 날짜/상호명만 낮은 경우는 재호출 없이 화면에서 노란색으로 표시만 해 속도를 지킨다.
-      if (data.confidence && data.confidence.amount === 'low') {
+      if (!scanCancelled && data.confidence && data.confidence.amount === 'low') {
         try {
           console.warn('금액 확신도 낮음, 정밀 모델로 재검증합니다');
           const better = await callGeminiApi(images, 'gemini-pro-latest');
@@ -878,14 +881,18 @@ async function scanReceipt(images) {
     } else {
       data = await simulateScan();
     }
+    if (scanCancelled) return; // 사용자가 취소한 뒤 뒤늦게 응답이 와도 폼을 덮어쓰지 않음
     fillFormFromScan(data);
     showToast(settings.geminiApiKey ? 'AI 분석이 완료됐어요' : '시뮬레이션 데이터로 채워졌어요', 'success');
   } catch (err) {
+    if (scanCancelled) return;
     console.error(err);
     showToast('스캔에 실패했어요. 직접 입력해주세요.', 'error');
   } finally {
-    document.getElementById('scan-overlay').classList.add('hidden');
-    document.getElementById('scan-overlay').classList.remove('flex');
+    if (!scanCancelled) {
+      document.getElementById('scan-overlay').classList.add('hidden');
+      document.getElementById('scan-overlay').classList.remove('flex');
+    }
   }
 }
 
@@ -910,14 +917,28 @@ async function callGeminiApi(images, modelId) {
   const imageParts = images.map(img => ({ inline_data: { mime_type: img.mimeType, data: img.base64 } }));
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${settings.geminiApiKey}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }, ...imageParts] }],
-      generationConfig: { response_mime_type: 'application/json', temperature: 0 }
-    })
-  });
+
+  // 네트워크가 불안정해서 응답이 끝없이 안 올 경우, 로딩 화면이 영구히 멈춰
+  // 앱 전체가 먹통이 되는 것을 막기 위해 25초 타임아웃을 둔다.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }, ...imageParts] }],
+        generationConfig: { response_mime_type: 'application/json', temperature: 0 }
+      }),
+      signal: controller.signal
+    });
+  } catch (err) {
+    if (err.name === 'AbortError') throw new Error('응답 시간이 너무 오래 걸려 스캔을 중단했어요 (네트워크 확인 후 다시 시도해주세요)');
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
   if (!res.ok) {
     let detail = '';
     try { detail = (await res.json())?.error?.message || ''; } catch {}
@@ -1315,6 +1336,13 @@ function bindEvents() {
   document.getElementById('btn-copy-script').addEventListener('click', copyAppsScriptCode);
   document.getElementById('btn-export-settings').addEventListener('click', exportSettingsCode);
   document.getElementById('btn-add-tab').addEventListener('click', addCustomTab);
+  document.getElementById('btn-scan-cancel').addEventListener('click', () => {
+    scanCancelled = true; // 진행 중이던 스캔 결과를 무시하도록 표시
+    const overlay = document.getElementById('scan-overlay');
+    overlay.classList.add('hidden');
+    overlay.classList.remove('flex');
+    showToast('스캔을 취소했어요. 직접 입력해주세요', 'info');
+  });
 }
 
 init();
