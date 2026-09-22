@@ -357,7 +357,37 @@ function loadExpenses() {
   try { return JSON.parse(localStorage.getItem(LS_EXPENSES)) || []; }
   catch { return []; }
 }
-function saveExpenses() { localStorage.setItem(LS_EXPENSES, JSON.stringify(expenses)); }
+function saveExpenses() {
+  try {
+    localStorage.setItem(LS_EXPENSES, JSON.stringify(expenses));
+  } catch (err) {
+    if (err && (err.name === 'QuotaExceededError' || err.code === 22)) {
+      // 기기 저장 공간이 다 찼을 때, 조용히 실패해서 저장 버튼이 먹통처럼 보이는 것을 막기 위해
+      // 오래된 기록부터 사진을 지워 공간을 확보한 뒤 다시 시도한다. (구글 시트에는 이미 올라가 있으므로
+      // 로컬 사진을 지워도 데이터 자체는 안전함)
+      console.warn('localStorage 용량 초과, 오래된 영수증 사진을 정리하고 재시도합니다', err);
+      const sorted = [...expenses].sort((a, b) => a.date.localeCompare(b.date));
+      let freedAny = false;
+      for (const e of sorted) {
+        if (e.images && e.images.length) {
+          e.images = [];
+          freedAny = true;
+          try {
+            localStorage.setItem(LS_EXPENSES, JSON.stringify(expenses));
+            showToast('기기 저장 공간이 부족해 오래된 영수증 사진을 일부 정리했어요', 'info');
+            return;
+          } catch (retryErr) { /* 계속 다음 항목 정리하며 재시도 */ }
+        }
+      }
+      if (!freedAny) {
+        showToast('기기 저장 공간이 가득 찼어요. 설정 > Safari > 웹사이트 데이터에서 정리해주세요', 'error');
+      }
+    } else {
+      console.error(err);
+      showToast('저장 중 오류가 발생했어요', 'error');
+    }
+  }
+}
 
 /* =========================================================================
    INIT
@@ -1017,12 +1047,19 @@ async function submitExpense() {
   if (!amount || amount <= 0) return showToast('결제금액을 입력해주세요', 'error');
   if (!shopName) return showToast('사용처를 입력해주세요', 'error');
 
+  // AI 스캔용 고화질 원본을 로컬(localStorage)에 그대로 쌓아두면 기기 저장 공간이 금방 꽉 차서
+  // 저장 자체가 조용히 실패하는 문제가 있었음. 로컬/서버 전송 모두 작은 썸네일만 남긴다.
+  const thumbImages = await Promise.all(currentImages.map(async img => ({
+    base64: await makeSheetThumbnail(img.dataUrl),
+    mimeType: 'image/jpeg'
+  })));
+
   const expense = {
     id: editingId || Date.now().toString(),
     team: currentTeam,
     date, amount, category, shopName, items,
     tabName: document.getElementById('field-tab').value || null,
-    images: currentImages.map(img => ({ base64: img.base64, mimeType: img.mimeType }))
+    images: thumbImages
   };
 
   if (editingId) {
@@ -1055,17 +1092,10 @@ async function syncToSheet(expense) {
   if (!sheetId) return showToast(`${expense.team}의 시트 ID가 설정되지 않았어요`, 'info');
 
   try {
-    // AI 스캔용 고화질 원본을 그대로 올리면 업로드 용량이 커지므로, 서버 전송용으로
-    // 별도로 축소한 작은 썸네일을 새로 만들어서 보낸다 (드라이브 저장 용량도 절약됨).
-    const thumbImages = await Promise.all((expense.images || []).map(async img => ({
-      base64: await makeSheetThumbnail(`data:${img.mimeType};base64,${img.base64}`),
-      mimeType: 'image/jpeg'
-    })));
-
     const res = await fetch(settings.webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ sheetId, ...expense, images: thumbImages })
+      body: JSON.stringify({ sheetId, ...expense })
     });
     // Apps Script 웹훅은 내부 오류가 나도 HTTP 200을 그대로 돌려주므로,
     // fetch 성공 여부가 아니라 응답 본문의 result 값을 직접 확인해야 실제 성공/실패를 알 수 있음.
