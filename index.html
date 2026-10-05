@@ -1626,6 +1626,7 @@ function deleteRecord(ss, id) {
 // 없으면 날짜 기준 "26.9월" 형태의 월별 탭을 찾거나 만듭니다. 둘 다 없으면 '양식' 탭을 복제합니다.
 function getOrCreateMonthSheet(ss, dateStr, customTabName) {
   var tabName = (customTabName && String(customTabName).trim()) ? String(customTabName).trim() : autoTabName(dateStr);
+  if (tabName.indexOf('NaN') !== -1) throw new Error('날짜가 올바르지 않아 탭을 만들지 않았습니다: ' + tabName);
   var sheet = ss.getSheetByName(tabName);
   if (!sheet) {
     var template = ss.getSheetByName(TEMPLATE_SHEET_NAME);
