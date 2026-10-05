@@ -133,7 +133,10 @@
     <section class="mt-4">
       <div class="flex items-center justify-between mb-2 px-1">
         <h3 class="text-sm font-bold text-gray-800">최근 결제 내역</h3>
-        <span id="list-count" class="text-xs text-gray-400"></span>
+        <div class="flex items-center gap-2">
+          <span id="list-count" class="text-xs text-gray-400"></span>
+          <button type="button" id="btn-refresh" class="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center" title="팀 내역 새로고침"><i id="refresh-icon" class="ph ph-arrows-clockwise text-sm text-gray-600"></i></button>
+        </div>
       </div>
       <div id="recent-list" class="flex flex-col gap-2"></div>
       <div id="list-empty" class="hidden flex-col items-center justify-center text-center py-14 text-gray-400">
@@ -495,6 +498,7 @@ function resetIfNewMonth() {
    ========================================================================= */
 function init() {
   resetIfNewMonth();
+  markLegacyExpenses();
   pruneOldLocalImages(); // 오래된 영수증 사진을 정리해 기기 저장공간이 다시 꽉 차는 것을 예방
   refreshTeamSelect();
   document.getElementById('team-select').addEventListener('change', e => selectTeam(e.target.value));
@@ -592,6 +596,7 @@ function selectTeam(teamName) {
     updateLockButtonVisibility();
     hideLockScreen();
     renderDashboard();
+    pullTeamFromSheet();
   } else {
     showLockScreen(teamName);
   }
@@ -945,8 +950,23 @@ function compressImage(source) {
   const dataUrl = canvas.toDataURL(outType, 0.85);
   const base64 = dataUrl.split(',')[1];
 
+  // 구글 시트/드라이브에 올라갈 보관용 사진은 글씨가 많은 영수증(진료비 명세서 등)도 읽히도록
+  // 더 높은 해상도로 따로 만듭니다. (AI 스캔용은 위의 1500px로 빠르게, 폰 저장용은 작은 썸네일로 유지)
+  let uploadBase64 = base64;
+  try {
+    const UP_MAX = 2200;
+    const sc = Math.min(1, UP_MAX / Math.max(source.width, source.height));
+    const uw = Math.round(source.width * sc), uh = Math.round(source.height * sc);
+    const uc = document.createElement('canvas');
+    uc.width = uw; uc.height = uh;
+    const uctx = uc.getContext('2d');
+    uctx.drawImage(source, 0, 0, uw, uh);
+    autoEnhance(uctx, uw, uh);
+    uploadBase64 = uc.toDataURL(outType, 0.8).split(',')[1];
+  } catch (e) { console.warn('보관용 사진 생성 실패, 스캔용 사진으로 대체', e); }
+
   if (source.close) source.close(); // ImageBitmap 메모리 해제
-  return { base64, mimeType: outType, dataUrl };
+  return { base64, mimeType: outType, dataUrl, uploadBase64 };
 }
 
 // 자동 명암 보정: 상하위 1%의 극단값(반사광·그림자 얼룩 등)은 무시하고 나머지 구간만 늘려서
@@ -1157,6 +1177,101 @@ function clearConfidenceHighlights() {
 }
 
 /* =========================================================================
+   팀 내역 공유 (구글 시트의 숨김 탭 "_앱기록"을 공용 저장소로 사용)
+   ========================================================================= */
+const pendingUploads = {};  // 전송이 끝날 때까지만 메모리에 들고 있는 고화질 보관용 사진 { 영수증id: [{base64, mimeType}] }
+let syncEpoch = 0;        // 저장/삭제 요청이 시작되거나 끝날 때마다 증가 (불러오기 도중 상태가 바뀌었는지 확인용)
+let pullInFlight = false;
+let lastPullAt = 0;
+const LS_SHARE_MIGRATED = 'tbs_share_v1';
+
+function monthStartMs() {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+}
+async function callWebhook(payload) {
+  const res = await fetch(settings.webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  });
+  return await res.json();
+}
+function setRefreshSpinning(on) {
+  const icon = document.getElementById('refresh-icon');
+  if (icon) icon.classList.toggle('animate-spin', on);
+}
+
+// 공유 기능이 생기기 전에 이 기기에서 저장한 내역은 이미 시트 본문에 올라가 있으므로
+// 다시 시트에 쓰지 않고(중복 방지) 공유 기록에만 등록합니다.
+function markLegacyExpenses() {
+  try {
+    if (localStorage.getItem(LS_SHARE_MIGRATED)) return;
+    let changed = false;
+    expenses.forEach(e => { if (!e.synced) { e.legacy = true; changed = true; } });
+    if (changed) saveExpenses();
+    localStorage.setItem(LS_SHARE_MIGRATED, '1');
+  } catch {}
+}
+
+function plainRecord(e) {
+  return { id: e.id, date: e.date, amount: e.amount, category: e.category, shopName: e.shopName, items: e.items, tabName: e.tabName || null };
+}
+
+async function pullTeamFromSheet(manual = false) {
+  const team = currentTeam;
+  const sheetId = settings.sheetIds[team];
+  if (!settings.webhookUrl || !sheetId) {
+    if (manual) showToast('Webhook URL 또는 시트 ID가 설정되지 않았어요', 'info');
+    return;
+  }
+  if (pullInFlight) return;
+  if (!manual && Date.now() - lastPullAt < 5000) return;
+  pullInFlight = true;
+  lastPullAt = Date.now();
+  setRefreshSpinning(true);
+  const epochAtStart = syncEpoch;
+  try {
+    // 1) 공유 기능 이전 내역은 공유 기록에만 등록
+    const legacy = expenses.filter(e => e.team === team && e.legacy && !e.synced);
+    for (const e of legacy) {
+      const r = await callWebhook({ action: 'import', sheetId, ...plainRecord(e) });
+      if (r && r.result === 'success') { e.synced = true; delete e.legacy; }
+    }
+    if (legacy.length) saveExpenses();
+
+    // 2) 시트에 아직 못 올린 내역을 다시 전송 (id 기준이라 여러 번 보내도 중복되지 않음)
+    const unsynced = expenses.filter(e => e.team === team && !e.synced && !e.legacy);
+    for (const e of unsynced) await syncToSheet(e, true);
+
+    // 3) 팀 전체 내역 불러오기
+    const startedEpoch = syncEpoch;
+    const r = await callWebhook({ action: 'list', sheetId, sinceMs: monthStartMs() });
+    if (!r || r.result !== 'success' || !Array.isArray(r.records)) throw new Error((r && r.message) || '응답 오류');
+    if (team !== currentTeam) return;
+    if (syncEpoch !== startedEpoch) return; // 불러오는 사이 저장/삭제가 있었으면 이번 결과는 버리고 다음에 다시 불러옴
+
+    const remoteIds = new Set(r.records.map(x => x.id));
+    const localById = new Map(expenses.filter(e => e.team === team).map(e => [e.id, e]));
+    const kept = expenses.filter(e => e.team !== team || (!e.synced && !remoteIds.has(e.id)));
+    const merged = r.records.map(x => ({
+      ...x, team, synced: true,
+      images: (localById.get(x.id) || {}).images || []
+    }));
+    expenses = [...kept, ...merged];
+    saveExpenses();
+    renderDashboard();
+    if (manual) showToast('팀 내역을 새로 불러왔어요', 'success');
+  } catch (err) {
+    console.warn('팀 내역 불러오기 실패', err);
+    if (manual) showToast('팀 내역을 불러오지 못했어요 (Apps Script를 새 버전으로 배포했는지 확인해주세요)', 'error');
+  } finally {
+    pullInFlight = false;
+    setRefreshSpinning(false);
+  }
+}
+
+/* =========================================================================
    SUBMIT / DELETE
    ========================================================================= */
 async function submitExpense() {
@@ -1177,12 +1292,15 @@ async function submitExpense() {
     mimeType: 'image/jpeg'
   })));
 
+  const previous = editingId ? expenses.find(e => e.id === editingId) : null;
   const expense = {
     id: editingId || Date.now().toString(),
     team: currentTeam,
     date, amount, category, shopName, items,
-    tabName: document.getElementById('field-tab').value || null,
-    images: thumbImages
+    tabName: document.getElementById('field-tab').value || (previous ? previous.tabName : null) || null,
+    images: thumbImages,
+    synced: previous ? !!previous.synced : false,
+    legacy: previous ? !!previous.legacy : false
   };
 
   if (editingId) {
@@ -1190,6 +1308,9 @@ async function submitExpense() {
     if (idx !== -1) expenses[idx] = expense;
   } else {
     expenses.push(expense);
+  }
+  if (!(previous && previous.synced)) {
+    pendingUploads[expense.id] = currentImages.map(img => ({ base64: img.uploadBase64 || img.base64, mimeType: img.mimeType }));
   }
   saveExpenses();
   renderDashboard();
@@ -1201,41 +1322,57 @@ async function submitExpense() {
 
 function deleteExpense() {
   if (!editingId) return;
-  if (!confirm('이 영수증을 삭제할까요?')) return;
+  if (!confirm('이 영수증을 삭제할까요?\n(같은 팀 모든 사람의 앱에서 사라지고, 시트의 해당 행도 비워져요)')) return;
+  const target = expenses.find(e => e.id === editingId);
   expenses = expenses.filter(e => e.id !== editingId);
+  if (target && (target.synced || target.legacy)) remoteDelete(target);
   saveExpenses();
   renderDashboard();
   showView('dashboard');
   showToast('삭제되었어요', 'success');
 }
 
-async function syncToSheet(expense) {
+async function remoteDelete(expense) {
   const sheetId = settings.sheetIds[expense.team];
-  if (!settings.webhookUrl) return showToast('Webhook URL이 설정되지 않아 로컬에만 저장됐어요', 'info');
-  if (!sheetId) return showToast(`${expense.team}의 시트 ID가 설정되지 않았어요`, 'info');
-
+  if (!settings.webhookUrl || !sheetId) return;
+  syncEpoch++;
   try {
-    const res = await fetch(settings.webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ sheetId, ...expense })
-    });
+    const r = await callWebhook({ action: 'delete', sheetId, id: expense.id });
+    if (!r || r.result !== 'success') showToast('시트에서 삭제하지 못했어요. 새로고침 후 다시 확인해주세요', 'error');
+  } catch (err) {
+    console.error(err);
+    showToast('시트에서 삭제하지 못했어요 (네트워크 확인)', 'error');
+  } finally { syncEpoch++; }
+}
+
+async function syncToSheet(expense, silent = false) {
+  const sheetId = settings.sheetIds[expense.team];
+  if (!settings.webhookUrl) { if (!silent) showToast('Webhook URL이 설정되지 않아 로컬에만 저장됐어요', 'info'); return; }
+  if (!sheetId) { if (!silent) showToast(`${expense.team}의 시트 ID가 설정되지 않았어요`, 'info'); return; }
+
+  syncEpoch++;
+  try {
+    // 이미 시트에 올라간 영수증을 수정하는 경우엔 사진을 다시 올리지 않고 글자 내용만 갱신
+    const payload = { action: 'save', sheetId, ...plainRecord(expense), images: expense.synced ? [] : (pendingUploads[expense.id] || expense.images || []) };
     // Apps Script 웹훅은 내부 오류가 나도 HTTP 200을 그대로 돌려주므로,
     // fetch 성공 여부가 아니라 응답 본문의 result 값을 직접 확인해야 실제 성공/실패를 알 수 있음.
     let result = null;
-    try { result = await res.json(); } catch (parseErr) { /* 응답이 JSON이 아닌 경우 아래에서 처리 */ }
+    try { result = await callWebhook(payload); } catch (parseErr) { /* 응답이 JSON이 아닌 경우 아래에서 처리 */ }
 
     if (result && result.result === 'success') {
-      showToast('구글 시트에 동기화됐어요', 'success');
-    } else {
+      const local = expenses.find(e => e.id === expense.id);
+      if (local) { local.synced = true; delete local.legacy; saveExpenses(); }
+      delete pendingUploads[expense.id];
+      if (!silent) showToast('구글 시트에 동기화됐어요', 'success');
+    } else if (!silent) {
       const detail = result && result.message ? `: ${result.message}` : '';
       console.error('시트 동기화 실패 응답', result);
       showToast(`시트 저장 실패${detail} (로컬 저장은 완료)`, 'error');
     }
   } catch (err) {
     console.error(err);
-    showToast('시트 동기화에 실패했어요 (로컬 저장은 완료)', 'error');
-  }
+    if (!silent) showToast('시트 동기화에 실패했어요 (로컬 저장은 완료)', 'error');
+  } finally { syncEpoch++; }
 }
 
 /* =========================================================================
@@ -1337,25 +1474,152 @@ var DRIVE_FOLDER_NAME = '팀예산스캐너_영수증';   // 영수증 이미지
 var START_ROW = 5;                              // 데이터가 시작되는 첫 번째 행
 var PHOTO_START_COL = 5;                        // 사진 1장째가 들어갈 열 (5=E열). 2장째는 F열, 3장째는 G열.
 
+var LOG_SHEET_NAME = '_앱기록';                // 팀원 간 내역 공유를 위한 숨김 탭 (지우지 마세요)
+
 function doPost(e) {
+  var lock = LockService.getScriptLock();
+  var locked = false;
   try {
     var data = JSON.parse(e.postData.contents);
     var ss = SpreadsheetApp.openById(data.sheetId);
-    var sheet = getOrCreateMonthSheet(ss, data.date, data.tabName);
+    var action = data.action || 'save';
 
-    // images: [{base64, mimeType}, ...] 최대 3장. 구버전 클라이언트 호환을 위해 imageBase64도 지원.
-    var images = data.images && data.images.length ? data.images : (data.imageBase64 ? [{ base64: data.imageBase64, mimeType: data.imageType }] : []);
-    var imageUrls = [];
-    for (var i = 0; i < images.length && i < 3; i++) {
-      imageUrls.push(uploadImageToDrive(images[i].base64, images[i].mimeType, data.shopName, data.date, i));
+    if (action === 'list') {
+      return jsonResponse({ result: 'success', records: listRecords(ss, data.sinceMs) });
     }
 
-    writeExpenseRow(sheet, data, imageUrls);
+    lock.waitLock(25000); // 여러 명이 동시에 저장해도 같은 행을 덮어쓰지 않도록 한 번에 한 요청만 처리
+    locked = true;
+
+    if (action === 'delete') { deleteRecord(ss, data.id); return jsonResponse({ result: 'success' }); }
+    if (action === 'import') { importRecord(ss, data); return jsonResponse({ result: 'success' }); }
+    saveRecord(ss, data);
     return jsonResponse({ result: 'success' });
   } catch (err) {
     console.error('doPost 실패: ' + err.message + ' | stack: ' + err.stack); // 실행 기록(시계 아이콘)에서 상세 로그로 확인 가능
     return jsonResponse({ result: 'error', message: err.message });
+  } finally {
+    if (locked) { try { lock.releaseLock(); } catch (x) {} }
   }
+}
+
+function recordOf(d) {
+  return { id: String(d.id), date: d.date, amount: d.amount, category: d.category, shopName: d.shopName, items: d.items, tabName: d.tabName || null };
+}
+
+function getLogSheet(ss) {
+  var s = ss.getSheetByName(LOG_SHEET_NAME);
+  if (!s) {
+    s = ss.insertSheet(LOG_SHEET_NAME);
+    s.getRange('A:A').setNumberFormat('@');
+    s.appendRow(['id', 'createdAt', 'deleted', 'json', 'tabName', 'row']);
+    s.hideSheet();
+  }
+  return s;
+}
+
+function findLogRow(log, id) {
+  var n = log.getLastRow();
+  if (n < 2) return 0;
+  var ids = log.getRange(2, 1, n - 1, 1).getValues();
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) === String(id)) return i + 2;
+  }
+  return 0;
+}
+
+function listRecords(ss, sinceMs) {
+  var log = ss.getSheetByName(LOG_SHEET_NAME);
+  if (!log || log.getLastRow() < 2) return [];
+  var rows = log.getRange(2, 1, log.getLastRow() - 1, 4).getValues();
+  var out = [];
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][2]) === '1') continue;
+    if (Number(rows[i][1]) < Number(sinceMs || 0)) continue;
+    try { var rec = JSON.parse(rows[i][3]); rec.id = String(rows[i][0]); out.push(rec); } catch (x) {}
+  }
+  return out;
+}
+
+// 새 영수증이면 시트 본문에 한 줄 추가하고, 이미 기록된 id(수정/재전송)이면 그 줄의 글자 내용만 갱신합니다.
+function saveRecord(ss, data) {
+  var log = getLogSheet(ss);
+  var rec = recordOf(data);
+  var logRow = findLogRow(log, data.id);
+  if (logRow) {
+    var info = log.getRange(logRow, 1, 1, 6).getValues()[0];
+    if (String(info[2]) !== '1') {
+      var newRow = updateSheetRow(ss, info, rec);
+      log.getRange(logRow, 4).setValue(JSON.stringify(rec));
+      if (newRow) log.getRange(logRow, 6).setValue(newRow);
+      return;
+    }
+  }
+
+  var sheet = getOrCreateMonthSheet(ss, data.date, data.tabName);
+  var images = data.images && data.images.length ? data.images : (data.imageBase64 ? [{ base64: data.imageBase64, mimeType: data.imageType }] : []);
+  var imageUrls = [];
+  for (var i = 0; i < images.length && i < 3; i++) {
+    if (!images[i] || !images[i].base64) { imageUrls.push(null); continue; }
+    imageUrls.push(uploadImageToDrive(images[i].base64, images[i].mimeType, data.shopName, data.date, i));
+  }
+  var row = writeExpenseRow(sheet, data, imageUrls);
+  var values = [String(data.id), Number(data.id) || Date.now(), 0, JSON.stringify(rec), sheet.getName(), row];
+  if (logRow) log.getRange(logRow, 1, 1, 6).setValues([values]);
+  else log.appendRow(values);
+}
+
+// 공유 기능 도입 이전에 이미 시트에 올라간 내역은 시트를 건드리지 않고 공유 기록에만 등록합니다.
+function importRecord(ss, data) {
+  var log = getLogSheet(ss);
+  if (findLogRow(log, data.id)) return;
+  var rec = recordOf(data);
+  log.appendRow([String(data.id), Number(data.id) || Date.now(), 0, JSON.stringify(rec), data.tabName || autoTabName(data.date), 0]);
+}
+
+function rowMatches(sheet, row, old) {
+  if (!row || row < START_ROW || row > sheet.getLastRow()) return false;
+  var v = sheet.getRange(row, 2, 1, 3).getValues()[0]; // B,C,D
+  return String(v[0]) === String(old.shopName) && Number(v[2]) === Number(old.amount);
+}
+
+function findRowByMatch(sheet, old) {
+  var last = sheet.getLastRow();
+  if (last < START_ROW) return 0;
+  var vals = sheet.getRange(START_ROW, 2, last - START_ROW + 1, 3).getValues();
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][0]) === String(old.shopName) && Number(vals[i][2]) === Number(old.amount)) return START_ROW + i;
+  }
+  return 0;
+}
+
+// 기록해 둔 행이 그대로인지 확인한 뒤에만 수정/삭제합니다. (누군가 시트에서 행을 직접 옮겼다면 건드리지 않음)
+function locateSheetRow(ss, info) {
+  var sheet = ss.getSheetByName(info[4]);
+  if (!sheet) return null;
+  var old = JSON.parse(info[3]);
+  var row = Number(info[5]) || 0;
+  if (!rowMatches(sheet, row, old)) row = findRowByMatch(sheet, old);
+  return row ? { sheet: sheet, row: row } : null;
+}
+
+function updateSheetRow(ss, info, rec) {
+  var loc = locateSheetRow(ss, info);
+  if (!loc) return 0;
+  loc.sheet.getRange(loc.row, 1, 1, 4).setValues([[rec.date, rec.shopName, rec.items, rec.amount]]);
+  return loc.row;
+}
+
+function deleteRecord(ss, id) {
+  var log = ss.getSheetByName(LOG_SHEET_NAME);
+  if (!log) return;
+  var logRow = findLogRow(log, id);
+  if (!logRow) return;
+  var info = log.getRange(logRow, 1, 1, 6).getValues()[0];
+  if (String(info[2]) === '1') return;
+  var loc = locateSheetRow(ss, info);
+  if (loc) loc.sheet.getRange(loc.row, 1, 1, 7).clearContent(); // 날짜~사진 칸을 비움 (빈 줄은 다음 저장 때 재사용됨)
+  log.getRange(logRow, 3).setValue(1);
 }
 
 // customTabName이 주어지면 그 이름의 탭을 그대로 찾거나 새로 만들고,
@@ -1407,12 +1671,22 @@ function writeExpenseRow(sheet, data, imageUrls) {
   for (var i = 0; i < imageUrls.length && i < 3; i++) {
     if (imageUrls[i]) placeImageInCell(sheet, row, PHOTO_START_COL + i, imageUrls[i]);
   }
+  return row;
 }
 
 // 구글 시트의 "선택한 셀에 이미지 배치"와 동일한 방식(CellImage)으로 셀 값 자체에 이미지를 넣습니다.
 function placeImageInCell(sheet, row, col, url) {
-  var cellImage = SpreadsheetApp.newCellImage().setSourceUrl(url).build();
-  sheet.getRange(row, col).setValue(cellImage);
+  var cell = sheet.getRange(row, col);
+  try {
+    cell.setValue(SpreadsheetApp.newCellImage().setSourceUrl(url).build());
+  } catch (err) {
+    Utilities.sleep(2000); // 드라이브가 아직 미리보기를 만들지 못했을 수 있어 잠시 뒤 한 번 더 시도
+    try {
+      cell.setValue(SpreadsheetApp.newCellImage().setSourceUrl(url).build());
+    } catch (err2) {
+      cell.setFormula('=IMAGE("' + url + '")'); // 마지막 수단: IMAGE 함수 (셀 크기에 맞춰 표시)
+    }
+  }
 }
 
 // base64 영수증 이미지를 구글 드라이브에 업로드하고, 이미지 URL을 반환합니다 (최대 3장까지 지원)
@@ -1425,7 +1699,8 @@ function uploadImageToDrive(base64, mimeType, shopName, dateStr, index) {
   var blob = Utilities.newBlob(bytes, mimeType || 'image/jpeg', fileName);
   var file = folder.createFile(blob);
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  return 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w1000';
+  Utilities.sleep(1500); // 공유 설정과 미리보기(썸네일) 생성이 반영될 시간을 줘서 사진이 깨져 보이는 것을 줄임
+  return 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w1600';
 }
 
 function getOrCreateFolder(name) {
@@ -1489,6 +1764,10 @@ function bindEvents() {
   document.getElementById('btn-copy-script').addEventListener('click', copyAppsScriptCode);
   document.getElementById('btn-export-settings').addEventListener('click', exportSettingsCode);
   document.getElementById('btn-add-tab').addEventListener('click', addCustomTab);
+  document.getElementById('btn-refresh').addEventListener('click', () => pullTeamFromSheet(true));
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pullTeamFromSheet(); });
+  window.addEventListener('focus', () => pullTeamFromSheet());
+  setInterval(() => { if (document.visibilityState === 'visible' && document.getElementById('view-form').classList.contains('hidden')) pullTeamFromSheet(); }, 60000);
   document.getElementById('btn-phrase-add').addEventListener('click', addCurrentPhrase);
   document.getElementById('btn-phrase-edit').addEventListener('click', () => { phraseEditMode = !phraseEditMode; renderPhrases(); });
   document.getElementById('phrase-list').addEventListener('click', onPhraseListClick);
