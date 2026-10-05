@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>팀 예산 스캐너</title>
+<meta name="theme-color" content="#1e3a8a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="팀 예산">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
 
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.0.3/src/regular/style.css">
@@ -202,6 +210,16 @@
       <div>
         <label class="text-xs font-semibold text-gray-500 mb-1.5 block">사용내역</label>
         <textarea id="field-items" rows="2" placeholder="예: 코칭스태프 중식 5인" class="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-3 text-sm font-medium text-gray-800 resize-none"></textarea>
+        <div class="mt-2">
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-[11px] font-semibold text-gray-400">자주 쓰는 문구 (<span id="phrase-team-label"></span>)</span>
+            <div class="flex gap-3">
+              <button type="button" id="btn-phrase-add" class="text-[11px] font-semibold text-blue-600">+ 현재 내용 저장</button>
+              <button type="button" id="btn-phrase-edit" class="text-[11px] font-semibold text-gray-400">편집</button>
+            </div>
+          </div>
+          <div id="phrase-list" class="flex flex-wrap gap-1.5"></div>
+        </div>
       </div>
       <p id="confidence-warning" class="hidden text-xs text-amber-600 bg-amber-50 rounded-xl px-3.5 py-2.5 items-center gap-1.5"><i class="ph-fill ph-warning-circle"></i><span></span></p>
     </div>
@@ -322,6 +340,8 @@ const LS_EXPENSES = 'tbs_expenses';
 const LS_TEAM = 'tbs_current_team';
 const LS_TAB_HISTORY_PREFIX = 'tbs_tab_history_'; // 팀별 최근 사용한 시트 탭 이름 기록
 const LS_UNLOCKED_TEAMS = 'tbs_unlocked_teams'; // 이 기기에서 접속 코드를 확인한 팀 목록
+const LS_PHRASES_PREFIX = 'tbs_phrases_'; // 팀별 자주 쓰는 문구
+const LS_LAST_MONTH = 'tbs_last_month';     // 마지막으로 앱을 연 달 (YYYY-MM)
 const SS_ADMIN_UNLOCKED = 'tbs_admin_unlocked'; // 세션 동안만 유지 (sessionStorage)
 
 /* =========================================================================
@@ -390,9 +410,92 @@ function saveExpenses() {
 }
 
 /* =========================================================================
+   자주 쓰는 문구 (팀별)
+   ========================================================================= */
+let phraseEditMode = false;
+function loadPhrases(team) {
+  try { const v = JSON.parse(localStorage.getItem(LS_PHRASES_PREFIX + team)); return Array.isArray(v) ? v : []; }
+  catch { return []; }
+}
+function savePhrases(team, list) {
+  try { localStorage.setItem(LS_PHRASES_PREFIX + team, JSON.stringify(list)); }
+  catch { showToast('문구를 저장하지 못했어요', 'error'); }
+}
+function escHtml(t) { return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function renderPhrases() {
+  const box = document.getElementById('phrase-list');
+  if (!box) return;
+  document.getElementById('phrase-team-label').textContent = currentTeam;
+  const list = loadPhrases(currentTeam);
+  document.getElementById('btn-phrase-edit').textContent = phraseEditMode ? '완료' : '편집';
+  if (!list.length) {
+    box.innerHTML = '<span class="text-[11px] text-gray-300">사용내역을 적고 "+ 현재 내용 저장"을 누르면 여기에 쌓여요</span>';
+    return;
+  }
+  box.innerHTML = list.map((t, i) => `
+    <button type="button" data-i="${i}" class="phrase-chip text-xs font-medium rounded-full px-3 py-1.5 ${phraseEditMode ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-700'}">
+      ${escHtml(t)}${phraseEditMode ? ' ✕' : ''}
+    </button>`).join('');
+}
+function onPhraseListClick(e) {
+  const btn = e.target.closest('.phrase-chip');
+  if (!btn) return;
+  const list = loadPhrases(currentTeam);
+  const i = Number(btn.dataset.i);
+  if (phraseEditMode) {
+    list.splice(i, 1);
+    savePhrases(currentTeam, list);
+    renderPhrases();
+    return;
+  }
+  const field = document.getElementById('field-items');
+  const cur = field.value.trim();
+  field.value = cur ? cur + ' ' + list[i] : list[i];
+  field.focus();
+}
+function addCurrentPhrase() {
+  const text = document.getElementById('field-items').value.trim();
+  if (!text) return showToast('먼저 사용내역을 입력해주세요', 'info');
+  const list = loadPhrases(currentTeam);
+  if (list.includes(text)) return showToast('이미 저장된 문구예요', 'info');
+  list.push(text);
+  savePhrases(currentTeam, list.slice(-30)); // 팀당 최대 30개
+  renderPhrases();
+  showToast('자주 쓰는 문구에 저장했어요', 'success');
+}
+
+/* =========================================================================
+   월이 바뀌면 지난달 기록 자동 정리
+   ========================================================================= */
+function currentMonthKey() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+// 달이 바뀐 뒤 처음 앱을 열 때 한 번, 이 기기에 남은 지난달 영수증 기록을 비웁니다.
+// 구글 시트에는 이미 올라가 있으므로 시트 데이터는 그대로입니다. (자주 쓰는 문구, 설정은 유지)
+function resetIfNewMonth() {
+  const now = currentMonthKey();
+  let last = null;
+  try { last = localStorage.getItem(LS_LAST_MONTH); } catch {}
+  if (last && last !== now) {
+    const before = expenses.length;
+    expenses = expenses.filter(e => {
+      const t = Number(e.id);
+      if (isNaN(t)) return false;
+      const d = new Date(t);
+      return (d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')) === now;
+    });
+    saveExpenses();
+    if (before !== expenses.length) setTimeout(() => showToast('새 달이 되어 지난달 기록을 정리했어요', 'info'), 600);
+  }
+  try { localStorage.setItem(LS_LAST_MONTH, now); } catch {}
+}
+
+/* =========================================================================
    INIT
    ========================================================================= */
 function init() {
+  resetIfNewMonth();
   pruneOldLocalImages(); // 오래된 영수증 사진을 정리해 기기 저장공간이 다시 꽉 차는 것을 예방
   refreshTeamSelect();
   document.getElementById('team-select').addEventListener('change', e => selectTeam(e.target.value));
@@ -553,6 +656,8 @@ function openForm(expense = null) {
   document.getElementById('field-items').value = expense ? expense.items : '';
   populateTabSelect(expense ? (expense.tabName || '') : '');
   clearConfidenceHighlights();
+  phraseEditMode = false;
+  renderPhrases();
 
   renderImageState();
   showView('form');
@@ -1265,7 +1370,7 @@ function getOrCreateMonthSheet(ss, dateStr, customTabName) {
     sheet = template.copyTo(ss);
     sheet.setName(tabName);
     ss.setActiveSheet(sheet);
-    ss.moveActiveSheet(ss.getSheets().length);
+    ss.moveActiveSheet(1);
   }
   return sheet;
 }
@@ -1385,6 +1490,9 @@ function bindEvents() {
   document.getElementById('btn-copy-script').addEventListener('click', copyAppsScriptCode);
   document.getElementById('btn-export-settings').addEventListener('click', exportSettingsCode);
   document.getElementById('btn-add-tab').addEventListener('click', addCustomTab);
+  document.getElementById('btn-phrase-add').addEventListener('click', addCurrentPhrase);
+  document.getElementById('btn-phrase-edit').addEventListener('click', () => { phraseEditMode = !phraseEditMode; renderPhrases(); });
+  document.getElementById('phrase-list').addEventListener('click', onPhraseListClick);
   document.getElementById('btn-scan-cancel').addEventListener('click', () => {
     scanCancelled = true; // 진행 중이던 스캔 결과를 무시하도록 표시
     const overlay = document.getElementById('scan-overlay');
