@@ -191,6 +191,9 @@
           <button type="button" id="btn-add-tab" class="w-12 shrink-0 rounded-xl bg-gray-100 hover:bg-gray-200 transition flex items-center justify-center">
             <i class="ph ph-plus text-lg text-gray-600"></i>
           </button>
+          <button type="button" id="btn-remove-tab" class="w-12 shrink-0 rounded-xl bg-red-50 hover:bg-red-100 transition flex items-center justify-center" title="선택한 탭을 목록에서 삭제">
+            <i class="ph ph-trash text-lg text-red-500"></i>
+          </button>
         </div>
         <p class="text-[11px] text-gray-400 mt-1.5">보통은 "자동"으로 두세요. 원정 경기 등 별도 탭이 필요할 때만 "+"로 새 탭을 추가해 선택하세요.</p>
       </div>
@@ -751,6 +754,17 @@ function addCustomTab() {
   const trimmed = name.trim();
   addTabHistory(currentTeam, trimmed);
   populateTabSelect(trimmed);
+}
+
+// 지금 선택된 탭 이름을 이 앱의 목록에서만 지웁니다. (구글 시트의 실제 탭은 삭제되지 않음)
+function removeSelectedTab() {
+  const sel = document.getElementById('field-tab');
+  const name = sel.value;
+  if (!name) return showToast('"자동"은 삭제할 수 없어요. 지울 탭을 먼저 선택해주세요', 'info');
+  if (!confirm(`"${name}" 을(를) 목록에서 삭제할까요?\n(구글 시트의 탭은 그대로 남아요)`)) return;
+  saveTabHistory(currentTeam, loadTabHistory(currentTeam).filter(t => t !== name));
+  populateTabSelect('');
+  showToast('목록에서 삭제했어요', 'success');
 }
 
 /* =========================================================================
@@ -1765,6 +1779,7 @@ function bindEvents() {
   document.getElementById('btn-copy-script').addEventListener('click', copyAppsScriptCode);
   document.getElementById('btn-export-settings').addEventListener('click', exportSettingsCode);
   document.getElementById('btn-add-tab').addEventListener('click', addCustomTab);
+  document.getElementById('btn-remove-tab').addEventListener('click', removeSelectedTab);
   document.getElementById('btn-refresh').addEventListener('click', () => pullTeamFromSheet(true));
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pullTeamFromSheet(); });
   window.addEventListener('focus', () => pullTeamFromSheet());
